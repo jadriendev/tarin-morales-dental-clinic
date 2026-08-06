@@ -41,11 +41,33 @@
                     <i style="-webkit-text-fill-color: transparent; -webkit-text-stroke: 1px;" class="fa fa-user"></i>
                 </a>
             </button>
-
+  
             <div class="lg:hidden">
-                <i class="text-3xl fa fa-bars"></i>
+                <button id="menuBtn">
+                    <i id="menuIcon" class="text-3xl fa fa-bars transition-all duration-300"></i>
+                </button>
             </div>
         </nav>
+
+        <!-- Pang mobile lng toh boss -->
+        <div id="mobileMenu" class="lg:hidden overflow-hidden max-h-0 opacity-0 transition-all duration-300 ease-in-out bg-white border-t">
+
+            <ul style="font-family: 'Manrope', sans-serif;" class="flex flex-col py-4">
+                <li><a href="#" class="block px-6 py-3 font-semibold text-gray-700 hover:bg-gray-100">Home</a></li>
+                <li><a href="#" class="block px-6 py-3 font-semibold text-gray-700 hover:bg-gray-100">About Us</a></li>
+                <li><a href="#" class="block px-6 py-3 font-semibold text-gray-700 hover:bg-gray-100">Services</a></li>
+                <li><a href="#" class="block px-6 py-3 font-semibold text-gray-700 hover:bg-gray-100">Why Choose Us</a></li>
+                <li><a href="#" class="block px-6 py-3 font-semibold text-gray-700 hover:bg-gray-100">Testimonials</a></li>
+                <li><a href="#" class="block px-6 py-3 font-semibold text-gray-700 hover:bg-gray-100">Contact</a></li>
+
+                <li class="px-6 mt-4">
+                    <a href="#" class="flex justify-center items-center gap-2 bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 text-white py-3 rounded-full font-semibold">
+                        Patient Login
+                        <i class="fa fa-user"></i>
+                    </a>
+                </li>
+            </ul>
+        </div>
     </header>
 
     <section style="font-family: 'Manrope', sans-serif;" class="bg-[#fefefe]">
@@ -491,4 +513,5 @@
         <h3 class="text-white text-sm text-center font-semibold">© 2020 Tarin-Morales Dental Clinic. All Rights Reserved.</h3>
     </div>
 </body>
+<script src="/scripts/hamburger.js"></script>
 </html>
