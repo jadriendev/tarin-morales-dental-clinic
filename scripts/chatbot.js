@@ -206,12 +206,13 @@ const userMessage = document.getElementById("userMessage");
 const chatMessages = document.getElementById("chatMessages");
 
 chatToggle.addEventListener("click", () => {
-    chatWindow.classList.remove("hidden");
+    chatWindow.classList.toggle("hidden");
 });
 
 closeChat.addEventListener("click", () => {
     chatWindow.classList.add("hidden");
 });
+
 
 function addMessage(message, sender) {
     const bubble = document.createElement("div");
