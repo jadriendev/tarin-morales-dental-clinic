@@ -13,6 +13,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Bebas+Neue&family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Manrope:wght@200..800&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Quattrocento:wght@400;700&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <!-- AOS -->
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.0/css/all.min.css" integrity="sha512-ApSLB1Pd3/bZN8fWB/RG9YhN/7bd9Hkf3AGaE2mPfebjrxagjuBtx2GcgdqIlJkUzwylBo61r9Xa9NmgBI0swA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <!-- Tailwind CSS -->
@@ -267,7 +269,7 @@
     <section class="bg-[#fefefe] py-10">
         <div class="max-w-7xl mx-auto px-5 lg:px-10 2xl:px-0">
             <div class="flex flex-col-reverse lg:flex-row items-center gap-10 lg:gap-16">
-                <div class="relative w-full lg:w-1/2 h-[340px] sm:h-[420px] lg:h-[500px] rounded-2xl overflow-hidden">
+                <div data-aos="fade-right" class="relative w-full lg:w-1/2 h-[340px] sm:h-[420px] lg:h-[500px] rounded-2xl overflow-hidden">
                     <img src="images/69c3a5d0-5915-46a5-92a0-c574f08c4b2a.png" alt="Tarin Morales Office" class="w-full h-full object-cover">
                     <div class="absolute inset-x-0 bottom-4 flex justify-center px-4">
                         <div class="flex items-center gap-4 rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 py-3 px-5 sm:px-8 max-w-sm">
@@ -283,7 +285,7 @@
                     </div>
                 </div>
 
-                <div class="w-full lg:w-1/2">
+                <div data-aos="fade-left" class="w-full lg:w-1/2">
                     <div class="bg-gray-200/50 w-fit rounded-full px-3 py-1 flex items-center gap-2">
                         <h3 class="text-md font-bold text-[#0c4ff5]">About Us</h3>
                     </div>
@@ -297,7 +299,7 @@
                         <p class="text-base lg:text-lg leading-8 max-w-md text-[#54556f] font-semibold mt-5">Tarin-Morales Dental Clinic is dedicated to providing compassionate and high quality dental care. Our goal is to help you achieve a healthy, beautiful smile that lasts a lifetime.</p>
                     </div>
 
-                    <div class="grid grid-cols-3 gap-4 sm:gap-8 mt-8 text-center">
+                    <div data-aos="fade-up" class="grid grid-cols-3 gap-4 sm:gap-8 mt-8 text-center">
                         <div class="flex flex-col lg:flex-row items-center gap-[.70rem]">
                             <div class="">
                                 <i class="text-[#0c4ff5] text-3xl lg:text-4xl fa-regular fa-face-smile"></i>
@@ -352,7 +354,7 @@
         </div>
     </section>
 
-    <section class="bg-[#fefefe] py-5">
+    <section data-aos="fade-up" class="bg-[#fefefe] py-5">
         <div class="max-w-7xl mx-auto lg:px-10 2xl:px-0">
             <div class="flex flex-col lg:flex-row items-center gap-8 py-6 px-5 lg:px-8 rounded-xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600">
                 <div class="flex flex-col lg:flex-row items-center text-center lg:text-left gap-5 lg:gap-8 py-2 lg:py-6 lg:px-5">
@@ -560,4 +562,6 @@
 <script src="scripts/knowledge.js"></script>
 <script src="scripts/responses.js"></script>
 <script src="scripts/chatbot.js"></script>
+<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script src="scripts/aos.js"></script>
 </html>
