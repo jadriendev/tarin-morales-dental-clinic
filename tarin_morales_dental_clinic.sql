@@ -29,7 +29,7 @@ SET time_zone = "+00:00";
 
 CREATE TABLE `tbl_admins` (
   `admin_id` int(11) NOT NULL,
-  `user_id` int(11) NOT NULL,
+  `username` varchar(50) NOT NULL,
   `first_name` varchar(100) NOT NULL,
   `last_name` varchar(100) NOT NULL,
   `status` enum('active','inactive') DEFAULT 'active'
