@@ -1,4 +1,6 @@
 <?php
+ob_start();
+
 $page_title = "New Appointment";
 $header_title = "Schedule Appointment";
 
@@ -6,6 +8,9 @@ include __DIR__ . '/includes/header.php';
 
 $success_message = '';
 $error_message   = '';
+
+// Fetch the active logged-in admin ID from session, default to 1 if not set
+$admin_id = $_SESSION['admin_id'] ?? $_SESSION['user_id'] ?? 1;
 
 // Retain submitted values across form re-renders on validation failure
 $patient_id       = $_POST['patient_id'] ?? '';
@@ -24,7 +29,7 @@ try {
     $stmtPatients = $pdo->query("SELECT patient_id, CONCAT(first_name, ' ', last_name) AS full_name FROM tbl_patients ORDER BY last_name ASC");
     $patients = $stmtPatients->fetchAll(PDO::FETCH_ASSOC);
 
-    $stmtDentists = $pdo->query("SELECT dentist_id, CONCAT('Dr. ', first_name, ' ', last_name) AS full_name FROM tbl_dentists WHERE status = 'active' ORDER BY last_name ASC");
+    $stmtDentists = $pdo->query("SELECT dentist_id, CONCAT('Dr. ', first_name, ' ', last_name) AS full_name FROM tbl_dentists WHERE status = 'Active' ORDER BY last_name ASC");
     $dentists = $stmtDentists->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log("Database Error (Fetch Dropdowns): " . $e->getMessage());
@@ -50,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error_message = "Invalid appointment status selected.";
     } else {
         try {
-            // Optional: Prevent Double-Booking (Check dentist availability at the specified date & time)
+            // Prevent Double-Booking (Check dentist availability at the specified date & time)
             if (!empty($dentist_id)) {
                 $checkStmt = $pdo->prepare("
                     SELECT COUNT(*) FROM tbl_appointments 
@@ -70,15 +75,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            // Insert Record
+            // Insert Record with admin_id foreign key
             $stmt = $pdo->prepare("
                 INSERT INTO tbl_appointments 
-                    (patient_id, dentist_id, appointment_date, appointment_time, procedure_name, reason, status, created_at) 
+                    (admin_id, patient_id, dentist_id, appointment_date, appointment_time, procedure_name, reason, status, created_at) 
                 VALUES 
-                    (:patient_id, :dentist_id, :appointment_date, :appointment_time, :procedure_name, :reason, :status, NOW())
+                    (:admin_id, :patient_id, :dentist_id, :appointment_date, :appointment_time, :procedure_name, :reason, :status, NOW())
             ");
 
             $stmt->execute([
+                ':admin_id'         => $admin_id,
                 ':patient_id'       => $patient_id,
                 ':dentist_id'       => $dentist_id ?: null,
                 ':appointment_date' => $appointment_date,
@@ -93,7 +99,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
 
         } catch (Exception $e) {
-            // Log full exception to server logs without exposing internal database details to users
             error_log("Database Error (Insert Appointment): " . $e->getMessage());
             $error_message = ($e instanceof PDOException) 
                 ? "An error occurred while saving the appointment. Please try again." 
