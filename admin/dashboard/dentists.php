@@ -6,19 +6,49 @@ include __DIR__ . '/includes/header.php';
 
 $stmtDentists = $pdo->query("
     SELECT 
-        d.dentist_id,
-        d.first_name,
-        d.last_name,
-        d.license_no,
-        d.specialization,
-        d.status,
-        u.email
-    FROM tbl_dentists d
-    LEFT JOIN tbl_users u ON d.user_id = u.user_id
-    ORDER BY d.dentist_id ASC
+        dentist_id,
+        username,
+        first_name,
+        last_name,
+        license_no,
+        specialization,
+        status
+    FROM tbl_dentists
+    ORDER BY dentist_id ASC
 ");
 $dentists = $stmtDentists->fetchAll(PDO::FETCH_ASSOC);
 ?>
+
+<style>
+  .table-even {
+    table-layout: fixed;
+    width: 100%;
+  }
+  .table-even th, 
+  .table-even td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+    padding: 12px;
+  }
+  
+  .table-even th:first-child,
+  .table-even td:first-child {
+    padding-left: 24px;
+  }
+
+  @media (max-width: 768px) {
+    .table-even {
+      table-layout: auto;
+      min-width: 650px;
+    }
+    .table-container {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+</style>
 
 <div class="card">
   <div class="head">
@@ -26,14 +56,14 @@ $dentists = $stmtDentists->fetchAll(PDO::FETCH_ASSOC);
     <a href="add-dentist.php">+ Add Dentist</a>
   </div>
   <div class="table-container">
-    <table>
+    <table class="table-even">
       <thead>
         <tr>
           <th>ID</th>
+          <th>Username</th>
           <th>Name</th>
           <th>License No.</th>
           <th>Specialization</th>
-          <th>Email</th>
           <th>Status</th>
           <th>Action</th>
         </tr>
@@ -42,11 +72,11 @@ $dentists = $stmtDentists->fetchAll(PDO::FETCH_ASSOC);
         <?php if (!empty($dentists)): ?>
           <?php foreach ($dentists as $d): ?>
             <tr>
-              <td>#<?php echo htmlspecialchars((string)$d['dentist_id'], ENT_QUOTES, 'UTF-8'); ?></td>
+              <td><?php echo htmlspecialchars((string)$d['dentist_id'], ENT_QUOTES, 'UTF-8'); ?></td>
+              <td><?php echo htmlspecialchars($d['username'] ?? 'N/A', ENT_QUOTES, 'UTF-8'); ?></td>
               <td class="patient-cell">Dr. <?php echo htmlspecialchars($d['first_name'] . ' ' . $d['last_name'], ENT_QUOTES, 'UTF-8'); ?></td>
               <td><?php echo htmlspecialchars($d['license_no'] ?? 'N/A', ENT_QUOTES, 'UTF-8'); ?></td>
               <td><?php echo htmlspecialchars(!empty($d['specialization']) ? $d['specialization'] : 'General Dentistry', ENT_QUOTES, 'UTF-8'); ?></td>
-              <td><?php echo htmlspecialchars($d['email'] ?? 'N/A', ENT_QUOTES, 'UTF-8'); ?></td>
               <td>
                 <?php $status_class = strtolower($d['status'] ?? 'active'); ?>
                 <span class="status <?php echo htmlspecialchars($status_class, ENT_QUOTES, 'UTF-8'); ?>">
