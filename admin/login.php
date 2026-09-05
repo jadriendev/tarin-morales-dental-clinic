@@ -5,7 +5,6 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once 'db.php';
 
-// Logout
 if (isset($_GET['logout']) && $_GET['logout'] === '1') {
     $_SESSION = [];
     if (ini_get("session.use_cookies")) {
@@ -17,13 +16,11 @@ if (isset($_GET['logout']) && $_GET['logout'] === '1') {
     exit();
 }
 
-// CSRF token (generate once per session)
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-// Login form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $validCsrf    = hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '');
     $inputAdminId = trim($_POST['username'] ?? '');
@@ -60,7 +57,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit();
 }
 
-// Error message for the view
 $errors = [
     'account_inactive'    => 'Your account is inactive. Please contact the system administrator.',
     'invalid_credentials' => 'Invalid Admin ID or password.',
@@ -119,11 +115,11 @@ $isLoggedInAdmin = isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 
                 <a href="admindashboard.php"
                    class="inline-block w-full py-2.5 rounded-lg text-white font-medium hover:opacity-90 transition text-center"
                    style="background: linear-gradient(to right, #2E9FE0, #9A2FC9);">
-                   Go to Dashboard
+                    Go to Dashboard
                 </a>
                 <a href="login.php?logout=1"
                    class="inline-block w-full py-2.5 rounded-lg bg-gray-200 text-gray-700 font-medium hover:bg-gray-300 transition text-center">
-                   Log Out
+                    Log Out
                 </a>
             </div>
         </div>
