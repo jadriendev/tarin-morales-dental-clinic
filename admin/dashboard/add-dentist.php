@@ -1,4 +1,6 @@
 <?php
+ob_start();
+
 $page_title = "Add Dentist";
 $header_title = "Add New Dentist";
 
@@ -7,80 +9,69 @@ include __DIR__ . '/includes/header.php';
 $success_message = '';
 $error_message   = '';
 
-// Allowed statuses for strict backend validation
 $allowed_statuses = ['Active', 'Inactive'];
 
-// Initialize input variables to retain values across failed validation attempts
+$username       = $_POST['username'] ?? '';
 $first_name     = $_POST['first_name'] ?? '';
 $last_name      = $_POST['last_name'] ?? '';
 $license_no     = $_POST['license_no'] ?? '';
 $specialization = $_POST['specialization'] ?? '';
-$email          = $_POST['email'] ?? '';
 $status         = $_POST['status'] ?? 'Active';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username       = trim($username);
     $first_name     = trim($first_name);
     $last_name      = trim($last_name);
     $license_no     = trim($license_no);
     $specialization = trim($specialization);
-    $email          = trim($email);
     $password       = $_POST['password'] ?? '';
     $status         = trim($status);
 
-    // Validation
-    if (empty($first_name) || empty($last_name) || empty($license_no) || empty($email) || empty($password)) {
-        $error_message = "Please fill in all required fields (First Name, Last Name, License No., Email, and Password).";
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error_message = "Please enter a valid email address.";
+    if (empty($username) || empty($first_name) || empty($last_name) || empty($license_no) || empty($password)) {
+        $error_message = "Please fill in all required fields (Username, First Name, Last Name, License No., and Password).";
     } elseif (strlen($password) < 6) {
         $error_message = "Password must be at least 6 characters long.";
     } elseif (!in_array($status, $allowed_statuses, true)) {
         $error_message = "Invalid status selected.";
     } else {
         try {
-            // Check if email already exists
-            $stmtCheck = $pdo->prepare("SELECT user_id FROM tbl_users WHERE email = ?");
-            $stmtCheck->execute([$email]);
+            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
-            if ($stmtCheck->fetch()) {
-                $error_message = "Email is already registered.";
+            $stmtDentist = $pdo->prepare("
+                INSERT INTO tbl_dentists (username, password, first_name, last_name, license_no, specialization, status) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmtDentist->execute([
+                $username,
+                $hashed_password,
+                $first_name,
+                $last_name,
+                $license_no,
+                $specialization ?: 'General Dentistry',
+                $status
+            ]);
+
+            header("Location: dentists.php?msg=added");
+            exit;
+
+        } catch (PDOException $e) {
+            error_log("Database Error (Add Dentist): " . $e->getMessage());
+
+            // Check for MySQL duplicate key error (1062)
+            if ($e->getCode() === '23000' && strpos($e->getMessage(), '1062') !== false) {
+                if (strpos($e->getMessage(), 'username') !== false) {
+                    $error_message = "The username '{$username}' is already registered.";
+                } elseif (strpos($e->getMessage(), 'license_no') !== false) {
+                    $error_message = "The license number '{$license_no}' is already registered.";
+                } else {
+                    $error_message = "A record with this information already exists.";
+                }
             } else {
-                $pdo->beginTransaction();
-
-                $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                $stmtUser = $pdo->prepare("
-                    INSERT INTO tbl_users (email, password, role, status) 
-                    VALUES (?, ?, 'dentist', ?)
-                ");
-                $stmtUser->execute([$email, $hashed_password, strtolower($status)]);
-                $user_id = $pdo->lastInsertId();
-
-                $stmtDentist = $pdo->prepare("
-                    INSERT INTO tbl_dentists (user_id, first_name, last_name, license_no, specialization, status) 
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ");
-                $stmtDentist->execute([
-                    $user_id,
-                    $first_name,
-                    $last_name,
-                    $license_no,
-                    $specialization ?: 'General Dentistry',
-                    $status
-                ]);
-
-                $pdo->commit();
-
-                // PRG Pattern: Redirect upon successful insertion to avoid double submit on refresh
-                header("Location: dentists.php?msg=added");
-                exit;
+                $error_message = "Database Error: " . $e->getMessage();
             }
         } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            // Log raw exception internally without exposing schema secrets to users
-            error_log("Database Error (Add Dentist): " . $e->getMessage());
-            $error_message = "A database error occurred while creating the account. Please try again.";
+            error_log("System Error (Add Dentist): " . $e->getMessage());
+            $error_message = "System Error: " . $e->getMessage();
         }
     }
 }
@@ -228,6 +219,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <form action="" method="POST">
     <div class="form-grid">
       <div class="form-group">
+        <label for="username">Username *</label>
+        <input type="text" id="username" name="username" value="<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>" required placeholder="e.g. drsmith">
+      </div>
+
+      <div class="form-group">
+        <label for="password">Account Password *</label>
+        <input type="password" id="password" name="password" required placeholder="Minimum 6 characters">
+      </div>
+
+      <div class="form-group">
         <label for="first_name">First Name *</label>
         <input type="text" id="first_name" name="first_name" value="<?php echo htmlspecialchars($first_name, ENT_QUOTES, 'UTF-8'); ?>" required placeholder="e.g. Jane">
       </div>
@@ -245,16 +246,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="form-group">
         <label for="specialization">Specialization</label>
         <input type="text" id="specialization" name="specialization" value="<?php echo htmlspecialchars($specialization, ENT_QUOTES, 'UTF-8'); ?>" placeholder="e.g. Orthodontics, General Dentistry">
-      </div>
-
-      <div class="form-group">
-        <label for="email">Email Address *</label>
-        <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8'); ?>" required placeholder="e.g. dr.smith@example.com">
-      </div>
-
-      <div class="form-group">
-        <label for="password">Account Password *</label>
-        <input type="password" id="password" name="password" required placeholder="Minimum 6 characters">
       </div>
 
       <div class="form-group full-width">
