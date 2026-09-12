@@ -49,7 +49,7 @@ $patients = $stmtPatients->fetchAll(PDO::FETCH_ASSOC);
               $full_name = trim($p['first_name'] . $middle_initial . $p['last_name']);
             ?>
             <tr>
-              <td>#<?php echo htmlspecialchars((string)$p['patient_id'], ENT_QUOTES, 'UTF-8'); ?></td>
+              <td><?php echo htmlspecialchars((string)$p['patient_id'], ENT_QUOTES, 'UTF-8'); ?></td>
               <td class="patient-cell"><?php echo htmlspecialchars($full_name ?: 'Unknown Patient', ENT_QUOTES, 'UTF-8'); ?></td>
               <td><?php echo htmlspecialchars($p['sex'] ?? 'N/A', ENT_QUOTES, 'UTF-8'); ?></td>
               <td><?php echo htmlspecialchars($p['contact_number'] ?? 'N/A', ENT_QUOTES, 'UTF-8'); ?></td>
