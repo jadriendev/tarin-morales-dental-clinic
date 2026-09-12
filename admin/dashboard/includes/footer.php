@@ -3,7 +3,6 @@
 </div>
 
 <style>
-  /* Ensure profile dropdown remains responsive on small screens */
   .profile-dropdown {
     position: absolute;
     right: 0;
