@@ -3,7 +3,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Database configuration
 $db_host = '127.0.0.1';
 $db_name = 'tarin_morales_dental_clinic';
 $db_user = 'root';
@@ -16,22 +15,20 @@ try {
         PDO::ATTR_EMULATE_PREPARES   => false,
     ]);
 } catch (PDOException $e) {
-    // Log detailed error internally for debugging
+
     error_log("Database Connection Error: " . $e->getMessage());
-    
-    // Display error message (set to $e->getMessage() while developing locally on XAMPP)
-    die("Database connection failed: " . $e->getMessage());
+
+    die("Database connection failed. Please try again later.");
 }
 
-// Default session variables
+
 $admin_id   = $_SESSION['admin_id'] ?? null;
 $admin_name = $_SESSION['full_name'] ?? "Admin";
 
-// Fetch admin profile details if logged in as an admin
+
 if (isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 'admin') {
     $user_id = $_SESSION['user_id'];
 
-    // Simplified query logic using dynamic parameter binding
     $sql = "
         SELECT admin_id, CONCAT(first_name, ' ', last_name) AS full_name 
         FROM tbl_admins 

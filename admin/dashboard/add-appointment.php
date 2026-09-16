@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/config.php';
+
 ob_start();
 
 $page_title = "New Appointment";
@@ -9,10 +11,8 @@ include __DIR__ . '/includes/header.php';
 $success_message = '';
 $error_message   = '';
 
-// Fetch the active logged-in admin ID from session, default to 1 if not set
 $admin_id = $_SESSION['admin_id'] ?? $_SESSION['user_id'] ?? 1;
 
-// Retain submitted values across form re-renders on validation failure
 $patient_id       = $_POST['patient_id'] ?? '';
 $dentist_id       = $_POST['dentist_id'] ?? '';
 $appointment_date = $_POST['appointment_date'] ?? '';
@@ -21,15 +21,13 @@ $procedure_name   = $_POST['procedure_name'] ?? '';
 $reason           = $_POST['reason'] ?? '';
 $status           = $_POST['status'] ?? 'pending';
 
-// Allowed statuses for strict backend validation
 $allowed_statuses = ['pending', 'confirmed', 'completed', 'cancelled'];
 
-// Fetch dropdown data with exception handling
 try {
     $stmtPatients = $pdo->query("SELECT patient_id, CONCAT(first_name, ' ', last_name) AS full_name FROM tbl_patients ORDER BY last_name ASC");
     $patients = $stmtPatients->fetchAll(PDO::FETCH_ASSOC);
 
-    $stmtDentists = $pdo->query("SELECT dentist_id, CONCAT('Dr. ', first_name, ' ', last_name) AS full_name FROM tbl_dentists WHERE status = 'Active' ORDER BY last_name ASC");
+    $stmtDentists = $pdo->query("SELECT dentist_id, CONCAT('Dr. ', first_name, ' ', last_name) AS full_name FROM tbl_dentists WHERE status = 'active' ORDER BY last_name ASC");
     $dentists = $stmtDentists->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log("Database Error (Fetch Dropdowns): " . $e->getMessage());
@@ -39,7 +37,6 @@ try {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Sanitize and trim inputs
     $patient_id       = trim($patient_id);
     $dentist_id       = trim($dentist_id);
     $appointment_date = trim($appointment_date);
@@ -48,34 +45,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $reason           = trim($reason);
     $status           = trim($status);
 
-    // Backend Form Validation
-    if (empty($patient_id) || empty($appointment_date) || empty($appointment_time) || empty($procedure_name)) {
-        $error_message = "Please fill in all required fields (Patient, Date, Time, and Procedure).";
+    if (empty($patient_id) || empty($dentist_id) || empty($appointment_date) || empty($appointment_time) || empty($procedure_name)) {
+        $error_message = "Please fill in all required fields (Patient, Dentist, Date, Time, and Procedure).";
     } elseif (!in_array($status, $allowed_statuses, true)) {
         $error_message = "Invalid appointment status selected.";
     } else {
         try {
-            // Prevent Double-Booking (Check dentist availability at the specified date & time)
-            if (!empty($dentist_id)) {
-                $checkStmt = $pdo->prepare("
-                    SELECT COUNT(*) FROM tbl_appointments 
-                    WHERE dentist_id = :dentist_id 
-                      AND appointment_date = :appointment_date 
-                      AND appointment_time = :appointment_time 
-                      AND status != 'cancelled'
-                ");
-                $checkStmt->execute([
-                    ':dentist_id'       => $dentist_id,
-                    ':appointment_date' => $appointment_date,
-                    ':appointment_time' => $appointment_time
-                ]);
+            $checkStmt = $pdo->prepare("
+                SELECT COUNT(*) FROM tbl_appointments 
+                WHERE dentist_id = :dentist_id 
+                  AND appointment_date = :appointment_date 
+                  AND appointment_time = :appointment_time 
+                  AND status != 'cancelled'
+            ");
+            $checkStmt->execute([
+                ':dentist_id'       => $dentist_id,
+                ':appointment_date' => $appointment_date,
+                ':appointment_time' => $appointment_time
+            ]);
 
-                if ($checkStmt->fetchColumn() > 0) {
-                    throw new Exception("The selected dentist is already booked for this date and time.");
-                }
+            if ($checkStmt->fetchColumn() > 0) {
+                throw new Exception("The selected dentist is already booked for this date and time.");
             }
 
-            // Insert Record with admin_id foreign key
             $stmt = $pdo->prepare("
                 INSERT INTO tbl_appointments 
                     (admin_id, patient_id, dentist_id, appointment_date, appointment_time, procedure_name, reason, status, created_at) 
@@ -86,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([
                 ':admin_id'         => $admin_id,
                 ':patient_id'       => $patient_id,
-                ':dentist_id'       => $dentist_id ?: null,
+                ':dentist_id'       => $dentist_id,
                 ':appointment_date' => $appointment_date,
                 ':appointment_time' => $appointment_time,
                 ':procedure_name'   => $procedure_name,
@@ -94,7 +86,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':status'           => $status
             ]);
 
-            // PRG Pattern: Redirect to prevent duplicate submission on page refresh
             header("Location: appointments.php?msg=success");
             exit;
 
@@ -264,8 +255,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
 
       <div class="form-group">
-        <label for="dentist_id">Assigned Dentist</label>
-        <select id="dentist_id" name="dentist_id">
+        <label for="dentist_id">Assigned Dentist *</label>
+        <select id="dentist_id" name="dentist_id" required>
           <option value="">-- Choose Dentist --</option>
           <?php foreach ($dentists as $d): ?>
             <option value="<?php echo htmlspecialchars($d['dentist_id'], ENT_QUOTES, 'UTF-8'); ?>"

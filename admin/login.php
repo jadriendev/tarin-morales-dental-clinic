@@ -21,7 +21,23 @@ if (empty($_SESSION['csrf_token'])) {
 }
 $csrfToken = $_SESSION['csrf_token'];
 
+// Basic brute-force protection
+$maxAttempts   = 5;
+$lockoutSeconds = 300; // 5 minutes
+
+if (!isset($_SESSION['login_attempts'])) {
+    $_SESSION['login_attempts'] = 0;
+    $_SESSION['login_lockout_until'] = 0;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $now = time();
+
+    if ($_SESSION['login_lockout_until'] > $now) {
+        header("Location: login.php?error=too_many_attempts");
+        exit();
+    }
+
     $validCsrf    = hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '');
     $inputAdminId = trim($_POST['username'] ?? '');
     $password     = $_POST['password'] ?? '';
@@ -36,6 +52,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$admin || !password_verify($password, $admin['password'])) {
+        $_SESSION['login_attempts']++;
+
+        if ($_SESSION['login_attempts'] >= $maxAttempts) {
+            $_SESSION['login_lockout_until'] = $now + $lockoutSeconds;
+            $_SESSION['login_attempts'] = 0;
+            header("Location: login.php?error=too_many_attempts");
+            exit();
+        }
+
         header("Location: login.php?error=invalid_credentials");
         exit();
     }
@@ -45,6 +70,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
+    // Successful login: reset attempt counters
+    $_SESSION['login_attempts'] = 0;
+    $_SESSION['login_lockout_until'] = 0;
+
     session_regenerate_id(true);
     unset($_SESSION['csrf_token']);
 
@@ -53,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $_SESSION['full_name'] = $admin['first_name'] . ' ' . $admin['last_name'];
     $_SESSION['role']      = 'admin';
 
-    header("Location: admindashboard.php");
+    header("Location: dashboard.php");
     exit();
 }
 
@@ -61,6 +90,7 @@ $errors = [
     'account_inactive'    => 'Your account is inactive. Please contact the system administrator.',
     'invalid_credentials' => 'Invalid Admin ID or password.',
     'unauthorized'        => 'Please sign in to access the admin portal.',
+    'too_many_attempts'   => 'Too many failed login attempts. Please try again in a few minutes.',
 ];
 $error = isset($_GET['error']) ? ($errors[$_GET['error']] ?? 'An error occurred. Please try again.') : '';
 
@@ -112,7 +142,7 @@ $isLoggedInAdmin = isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 
             <p class="text-gray-500 mb-4 break-all"><?php echo htmlspecialchars($_SESSION["full_name"] ?? 'Admin'); ?></p>
 
             <div class="space-y-2">
-                <a href="admindashboard.php"
+                <a href="dashboard.php"
                    class="inline-block w-full py-2.5 rounded-lg text-white font-medium hover:opacity-90 transition text-center"
                    style="background: linear-gradient(to right, #2E9FE0, #9A2FC9);">
                     Go to Dashboard
