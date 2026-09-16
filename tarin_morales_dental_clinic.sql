@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 21, 2026 at 12:28 PM
+-- Generation Time: Sep 12, 2026 at 09:37 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -30,10 +30,18 @@ SET time_zone = "+00:00";
 CREATE TABLE `tbl_admins` (
   `admin_id` int(11) NOT NULL,
   `username` varchar(50) NOT NULL,
+  `password` varchar(255) NOT NULL,
   `first_name` varchar(100) NOT NULL,
   `last_name` varchar(100) NOT NULL,
   `status` enum('active','inactive') DEFAULT 'active'
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+
+--
+-- Dumping data for table `tbl_admins`
+--
+
+INSERT INTO `tbl_admins` (`admin_id`, `username`, `password`, `first_name`, `last_name`, `status`) VALUES
+(1, 'admin', '', 'HEHE', '.com', 'active');
 
 -- --------------------------------------------------------
 
@@ -54,6 +62,16 @@ CREATE TABLE `tbl_appointments` (
   `created_at` datetime DEFAULT current_timestamp(),
   `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+
+--
+-- Dumping data for table `tbl_appointments`
+--
+
+INSERT INTO `tbl_appointments` (`appointment_id`, `patient_id`, `dentist_id`, `admin_id`, `appointment_date`, `appointment_time`, `procedure_name`, `reason`, `status`, `created_at`, `updated_at`) VALUES
+(8, 1, 3, 1, '2026-09-07', '10:00:00', 'lambingan', 'kulang sa lambing', 'confirmed', '2026-09-05 17:20:18', '2026-09-05 17:20:18'),
+(9, 1, 5, 1, '2026-09-30', '17:40:00', 'qwerty', 'qwerty', 'cancelled', '2026-09-05 17:40:50', '2026-09-05 17:40:50'),
+(10, 1, 5, 1, '2026-09-05', '17:41:00', 'asdf', 'walk-in', 'pending', '2026-09-05 17:42:19', '2026-09-05 17:42:19'),
+(11, 2, 3, 1, '2026-09-05', '17:45:00', 'asdf', 'walk-in', 'completed', '2026-09-05 17:45:53', '2026-09-05 17:45:53');
 
 -- --------------------------------------------------------
 
@@ -81,13 +99,23 @@ CREATE TABLE `tbl_dental_records` (
 
 CREATE TABLE `tbl_dentists` (
   `dentist_id` int(11) NOT NULL,
-  `user_id` int(11) NOT NULL,
+  `username` varchar(55) NOT NULL,
+  `password` varchar(255) NOT NULL,
   `first_name` varchar(100) NOT NULL,
   `last_name` varchar(100) NOT NULL,
   `license_no` varchar(50) NOT NULL,
   `specialization` varchar(100) DEFAULT NULL,
   `status` enum('active','inactive') DEFAULT 'active'
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+
+--
+-- Dumping data for table `tbl_dentists`
+--
+
+INSERT INTO `tbl_dentists` (`dentist_id`, `username`, `password`, `first_name`, `last_name`, `license_no`, `specialization`, `status`) VALUES
+(3, 'Dehinsse', '$2y$10$NSXcMmrpPmJrU45wQDz6eO3YlnZ2F3.qGanmuhzN7iyUB/OD', 'Denise Andrea', 'Fadrigo', 'JBJB-67676', 'OB-GYN', 'active'),
+(5, 'Dehinssee', '$2y$10$ZSPOHPQCm8oBRncNwUxOXeBKSa9HZikvPP/iZbudSvRd/Nb2', 'Denise Andrea', 'Fadrigo', 'JBJB-67678', 'OB-GYN', 'active'),
+(6, 'sample', '$2y$10$PShu88drsnuslHWb8kTHneEpSr0m52xtjTvcicSuohYhDzlM', 'sample', 'sample', 'SMPL-12345', 'sample', 'inactive');
 
 -- --------------------------------------------------------
 
@@ -107,6 +135,15 @@ CREATE TABLE `tbl_patients` (
   `address` text NOT NULL,
   `date_registered` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+
+--
+-- Dumping data for table `tbl_patients`
+--
+
+INSERT INTO `tbl_patients` (`patient_id`, `user_id`, `first_name`, `middle_name`, `last_name`, `birth_date`, `sex`, `contact_number`, `address`, `date_registered`) VALUES
+(1, 1, 'JB', 'Maricua', 'Aguilar', '2026-09-05', 'Male', '09676767676', 'taga doon', '2026-09-05 17:03:46'),
+(2, 10, 'mai', 'eacakes', 'de leon', '2026-09-05', 'Female', '09676767678', 'ikaw na mag isip', '2026-09-05 17:45:09'),
+(3, 11, 'kort', 'imanwel', 'isternun', '2026-09-05', 'Male', '09676767679', 'qwerty', '2026-09-05 17:46:58');
 
 -- --------------------------------------------------------
 
@@ -168,11 +205,21 @@ CREATE TABLE `tbl_treatments` (
 CREATE TABLE `tbl_users` (
   `user_id` int(11) NOT NULL,
   `email` varchar(255) NOT NULL,
+  `username` varchar(55) NOT NULL,
   `password` varchar(255) NOT NULL,
   `role` enum('admin','dentist','patient') NOT NULL,
   `status` enum('active','inactive') DEFAULT 'active',
   `created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+
+--
+-- Dumping data for table `tbl_users`
+--
+
+INSERT INTO `tbl_users` (`user_id`, `email`, `username`, `password`, `role`, `status`, `created_at`) VALUES
+(1, 'monggojb@gagamboy.com', '', '$2y$10$0vzBUWgWC9xFzRsuBrUa5u9/ZePGiCT.0oNC0kgafM0/vMIDvt7H.', 'patient', 'active', '2026-09-05 17:03:46'),
+(10, 'johndoe@sample.com', '', '$2y$10$cnk2tLDacQaANFdyuPo0pOFDfhc3EDfS1sDrhHWoi.i5lpopIB6xK', 'patient', 'inactive', '2026-09-05 17:45:09'),
+(11, '123@gmail.com', '', '$2y$10$49k7GVOLoOLyZRBy6jbpTeZerPKAE97nrjsRv8gJcrXPbb.z..2Jq', 'patient', 'active', '2026-09-05 17:46:58');
 
 --
 -- Indexes for dumped tables
@@ -208,8 +255,7 @@ ALTER TABLE `tbl_dental_records`
 --
 ALTER TABLE `tbl_dentists`
   ADD PRIMARY KEY (`dentist_id`),
-  ADD UNIQUE KEY `license_no` (`license_no`),
-  ADD KEY `fk_dentists_user` (`user_id`);
+  ADD UNIQUE KEY `license_no` (`license_no`);
 
 --
 -- Indexes for table `tbl_patients`
@@ -255,13 +301,13 @@ ALTER TABLE `tbl_users`
 -- AUTO_INCREMENT for table `tbl_admins`
 --
 ALTER TABLE `tbl_admins`
-  MODIFY `admin_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `admin_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `tbl_appointments`
 --
 ALTER TABLE `tbl_appointments`
-  MODIFY `appointment_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `appointment_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `tbl_dental_records`
@@ -273,13 +319,13 @@ ALTER TABLE `tbl_dental_records`
 -- AUTO_INCREMENT for table `tbl_dentists`
 --
 ALTER TABLE `tbl_dentists`
-  MODIFY `dentist_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `dentist_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `tbl_patients`
 --
 ALTER TABLE `tbl_patients`
-  MODIFY `patient_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `patient_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `tbl_patient_teeth`
@@ -303,7 +349,7 @@ ALTER TABLE `tbl_treatments`
 -- AUTO_INCREMENT for table `tbl_users`
 --
 ALTER TABLE `tbl_users`
-  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- Constraints for dumped tables
@@ -325,12 +371,6 @@ ALTER TABLE `tbl_dental_records`
   ADD CONSTRAINT `fk_dental_records_dentist` FOREIGN KEY (`dentist_id`) REFERENCES `tbl_dentists` (`dentist_id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_dental_records_patient` FOREIGN KEY (`patient_id`) REFERENCES `tbl_patients` (`patient_id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_dental_records_treatment` FOREIGN KEY (`treatment_id`) REFERENCES `tbl_treatments` (`treatment_id`) ON UPDATE CASCADE;
-
---
--- Constraints for table `tbl_dentists`
---
-ALTER TABLE `tbl_dentists`
-  ADD CONSTRAINT `fk_dentists_user` FOREIGN KEY (`user_id`) REFERENCES `tbl_users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `tbl_patients`

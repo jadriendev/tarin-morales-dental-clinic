@@ -21,9 +21,8 @@ if (empty($_SESSION['csrf_token'])) {
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-// Basic brute-force protection
-$maxAttempts   = 5;
-$lockoutSeconds = 300; // 5 minutes
+$maxAttempts    = 5;
+$lockoutSeconds = 300;
 
 if (!isset($_SESSION['login_attempts'])) {
     $_SESSION['login_attempts'] = 0;
@@ -38,20 +37,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    $validCsrf    = hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '');
-    $inputAdminId = trim($_POST['username'] ?? '');
-    $password     = $_POST['password'] ?? '';
+    $validCsrf = hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '');
+    $username  = trim($_POST['username'] ?? '');
+    $password  = $_POST['password'] ?? '';
 
-    if (!$validCsrf || $inputAdminId === '' || !ctype_digit($inputAdminId) || $password === '') {
+    if (!$validCsrf || $username === '' || $password === '') {
         header("Location: login.php?error=invalid_credentials");
         exit();
     }
 
-    $stmt = $pdo->prepare("SELECT admin_id, user_id, first_name, last_name, password, status FROM tbl_admins WHERE admin_id = :admin_id LIMIT 1");
-    $stmt->execute(['admin_id' => $inputAdminId]);
+    $stmt = $pdo->prepare("SELECT admin_id, username, first_name, last_name, password, status FROM tbl_admins WHERE username = :username LIMIT 1");
+    $stmt->execute(['username' => $username]);
     $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$admin || !password_verify($password, $admin['password'])) {
+    if (!$admin || $admin['password'] === '' || !password_verify($password, $admin['password'])) {
         $_SESSION['login_attempts']++;
 
         if ($_SESSION['login_attempts'] >= $maxAttempts) {
@@ -70,7 +69,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    // Successful login: reset attempt counters
     $_SESSION['login_attempts'] = 0;
     $_SESSION['login_lockout_until'] = 0;
 
@@ -78,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     unset($_SESSION['csrf_token']);
 
     $_SESSION['admin_id']  = $admin['admin_id'];
-    $_SESSION['user_id']   = $admin['user_id'];
+    $_SESSION['user_id']   = $admin['admin_id'];
     $_SESSION['full_name'] = $admin['first_name'] . ' ' . $admin['last_name'];
     $_SESSION['role']      = 'admin';
 
@@ -88,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $errors = [
     'account_inactive'    => 'Your account is inactive. Please contact the system administrator.',
-    'invalid_credentials' => 'Invalid Admin ID or password.',
+    'invalid_credentials' => 'Invalid username or password.',
     'unauthorized'        => 'Please sign in to access the admin portal.',
     'too_many_attempts'   => 'Too many failed login attempts. Please try again in a few minutes.',
 ];
@@ -175,12 +173,12 @@ $isLoggedInAdmin = isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
 
             <div>
-                <label class="block text-sm font-medium text-gray-600 mb-1">Admin ID</label>
+                <label class="block text-sm font-medium text-gray-600 mb-1">Username</label>
                 <div class="relative flex items-center">
                     <i class="fa-solid fa-user absolute left-3.5 text-gray-400 text-lg pointer-events-none"></i>
                     <input type="text" name="username" required
                         class="w-full rounded-lg border border-gray-300 pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#2E9FE0] focus:border-transparent transition"
-                        placeholder="Enter Admin ID">
+                        placeholder="Enter Username">
                 </div>
             </div>
 
