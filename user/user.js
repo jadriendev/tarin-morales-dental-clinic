@@ -37,7 +37,10 @@ window.addEventListener("click", function(event) {
         menu.classList.remove("show");
     }
 
-    if (event.target.classList.contains("modal")) {
+    if (
+        event.target.classList.contains("modal") ||
+        event.target.classList.contains("settings-modal")
+    ) {
         event.target.classList.remove("show");
         document.body.style.overflow = "";
     }
@@ -45,16 +48,38 @@ window.addEventListener("click", function(event) {
 
 window.addEventListener("keydown", function(event) {
     if (event.key === "Escape") {
+
         const menu = document.getElementById("topMenu");
 
         if (menu) {
             menu.classList.remove("show");
         }
 
-        document.querySelectorAll(".modal").forEach(function(modal) {
+        document.querySelectorAll(".modal, .settings-modal").forEach(function(modal) {
             modal.classList.remove("show");
         });
 
         document.body.style.overflow = "";
+    }
+});
+
+function toggleAccountMenu() {
+    const accountMenu = document.getElementById("accountMenu");
+
+    if (accountMenu) {
+        accountMenu.classList.toggle("show");
+    }
+}
+
+document.addEventListener("click", function(event) {
+    const accountContainer = document.querySelector(".account-container");
+    const accountMenu = document.getElementById("accountMenu");
+
+    if (
+        accountContainer &&
+        accountMenu &&
+        !accountContainer.contains(event.target)
+    ) {
+        accountMenu.classList.remove("show");
     }
 });
