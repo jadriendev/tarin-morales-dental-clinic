@@ -11,7 +11,15 @@ include __DIR__ . '/includes/header.php';
 $success_message = '';
 $error_message   = '';
 
-$admin_id = $_SESSION['admin_id'] ?? $_SESSION['user_id'] ?? 1;
+/*
+|--------------------------------------------------------------------------
+| Admin ID
+|--------------------------------------------------------------------------
+| tbl_appointments.admin_id references tbl_admins.admin_id.
+| Temporary fallback to admin ID 1 based on your current database.
+| Ideally, login.php should set $_SESSION['admin_id'] after login.
+*/
+$admin_id = $_SESSION['admin_id'] ?? 1;
 
 $patient_id       = $_POST['patient_id'] ?? '';
 $dentist_id       = $_POST['dentist_id'] ?? '';
@@ -21,22 +29,74 @@ $procedure_name   = $_POST['procedure_name'] ?? '';
 $reason           = $_POST['reason'] ?? '';
 $status           = $_POST['status'] ?? 'pending';
 
-$allowed_statuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+/*
+|--------------------------------------------------------------------------
+| Appointment Statuses
+|--------------------------------------------------------------------------
+| These exactly match tbl_appointments.status.
+*/
+$allowed_statuses = [
+    'pending',
+    'confirmed',
+    'for_dentist',
+    'in_progress',
+    'completed',
+    'cancelled',
+    'no_show'
+];
 
+/*
+|--------------------------------------------------------------------------
+| Load Patients and Dentists
+|--------------------------------------------------------------------------
+*/
 try {
-    $stmtPatients = $pdo->query("SELECT patient_id, CONCAT(first_name, ' ', last_name) AS full_name FROM tbl_patients ORDER BY last_name ASC");
+
+    $stmtPatients = $pdo->query("
+        SELECT
+            patient_id,
+            CONCAT(
+                first_name,
+                ' ',
+                COALESCE(CONCAT(middle_name, ' '), ''),
+                last_name
+            ) AS full_name
+        FROM tbl_patients
+        ORDER BY last_name ASC, first_name ASC
+    ");
+
     $patients = $stmtPatients->fetchAll(PDO::FETCH_ASSOC);
 
-    $stmtDentists = $pdo->query("SELECT dentist_id, CONCAT('Dr. ', first_name, ' ', last_name) AS full_name FROM tbl_dentists WHERE status = 'active' ORDER BY last_name ASC");
+
+    $stmtDentists = $pdo->query("
+        SELECT
+            dentist_id,
+            CONCAT('Dr. ', first_name, ' ', last_name) AS full_name
+        FROM tbl_dentists
+        WHERE status = 'active'
+        ORDER BY last_name ASC, first_name ASC
+    ");
+
     $dentists = $stmtDentists->fetchAll(PDO::FETCH_ASSOC);
+
 } catch (PDOException $e) {
+
     error_log("Database Error (Fetch Dropdowns): " . $e->getMessage());
-    $error_message = "Unable to load page data. Please try again later.";
+
+    $error_message = "Unable to load patients and dentists. Please try again later.";
+
     $patients = [];
     $dentists = [];
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| Save Appointment
+|--------------------------------------------------------------------------
+*/
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
     $patient_id       = trim($patient_id);
     $dentist_id       = trim($dentist_id);
     $appointment_date = trim($appointment_date);
@@ -45,19 +105,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $reason           = trim($reason);
     $status           = trim($status);
 
-    if (empty($patient_id) || empty($dentist_id) || empty($appointment_date) || empty($appointment_time) || empty($procedure_name)) {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Required Fields
+    |--------------------------------------------------------------------------
+    */
+    if (
+        empty($patient_id) ||
+        empty($dentist_id) ||
+        empty($appointment_date) ||
+        empty($appointment_time) ||
+        empty($procedure_name)
+    ) {
+
         $error_message = "Please fill in all required fields (Patient, Dentist, Date, Time, and Procedure).";
+
     } elseif (!in_array($status, $allowed_statuses, true)) {
+
         $error_message = "Invalid appointment status selected.";
+
     } else {
+
         try {
-            $checkStmt = $pdo->prepare("
-                SELECT COUNT(*) FROM tbl_appointments 
-                WHERE dentist_id = :dentist_id 
-                  AND appointment_date = :appointment_date 
-                  AND appointment_time = :appointment_time 
-                  AND status != 'cancelled'
+
+            /*
+            |--------------------------------------------------------------------------
+            | Verify Patient Exists
+            |--------------------------------------------------------------------------
+            */
+            $patientCheck = $pdo->prepare("
+                SELECT patient_id
+                FROM tbl_patients
+                WHERE patient_id = :patient_id
+                LIMIT 1
             ");
+
+            $patientCheck->execute([
+                ':patient_id' => $patient_id
+            ]);
+
+            if (!$patientCheck->fetch()) {
+                throw new Exception("The selected patient does not exist.");
+            }
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Verify Dentist Exists and Is Active
+            |--------------------------------------------------------------------------
+            */
+            $dentistCheck = $pdo->prepare("
+                SELECT dentist_id
+                FROM tbl_dentists
+                WHERE dentist_id = :dentist_id
+                  AND status = 'active'
+                LIMIT 1
+            ");
+
+            $dentistCheck->execute([
+                ':dentist_id' => $dentist_id
+            ]);
+
+            if (!$dentistCheck->fetch()) {
+                throw new Exception("The selected dentist is not available.");
+            }
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Check Dentist Schedule
+            |--------------------------------------------------------------------------
+            | Do not allow two active appointments for the same dentist,
+            | date, and time.
+            |
+            | cancelled and no_show appointments do not block the schedule.
+            |--------------------------------------------------------------------------
+            */
+            $checkStmt = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM tbl_appointments
+                WHERE dentist_id = :dentist_id
+                  AND appointment_date = :appointment_date
+                  AND appointment_time = :appointment_time
+                  AND status NOT IN ('cancelled', 'no_show')
+            ");
+
             $checkStmt->execute([
                 ':dentist_id'       => $dentist_id,
                 ':appointment_date' => $appointment_date,
@@ -65,14 +198,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
 
             if ($checkStmt->fetchColumn() > 0) {
-                throw new Exception("The selected dentist is already booked for this date and time.");
+                throw new Exception(
+                    "The selected dentist is already booked for this date and time."
+                );
             }
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Insert Appointment
+            |--------------------------------------------------------------------------
+            | These column names exactly match your current database:
+            |
+            | admin_id
+            | patient_id
+            | dentist_id
+            | appointment_date
+            | appointment_time
+            | procedure_name
+            | reason
+            | status
+            | created_at
+            |--------------------------------------------------------------------------
+            */
             $stmt = $pdo->prepare("
-                INSERT INTO tbl_appointments 
-                    (admin_id, patient_id, dentist_id, appointment_date, appointment_time, procedure_name, reason, status, created_at) 
-                VALUES 
-                    (:admin_id, :patient_id, :dentist_id, :appointment_date, :appointment_time, :procedure_name, :reason, :status, NOW())
+                INSERT INTO tbl_appointments (
+                    admin_id,
+                    patient_id,
+                    dentist_id,
+                    appointment_date,
+                    appointment_time,
+                    procedure_name,
+                    reason,
+                    status,
+                    created_at
+                )
+                VALUES (
+                    :admin_id,
+                    :patient_id,
+                    :dentist_id,
+                    :appointment_date,
+                    :appointment_time,
+                    :procedure_name,
+                    :reason,
+                    :status,
+                    NOW()
+                )
             ");
 
             $stmt->execute([
@@ -82,18 +253,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':appointment_date' => $appointment_date,
                 ':appointment_time' => $appointment_time,
                 ':procedure_name'   => $procedure_name,
-                ':reason'           => $reason ?: null,
+                ':reason'           => $reason !== '' ? $reason : null,
                 ':status'           => $status
             ]);
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Success
+            |--------------------------------------------------------------------------
+            */
             header("Location: appointments.php?msg=success");
             exit;
 
-        } catch (Exception $e) {
+        } catch (PDOException $e) {
+
             error_log("Database Error (Insert Appointment): " . $e->getMessage());
-            $error_message = ($e instanceof PDOException) 
-                ? "An error occurred while saving the appointment. Please try again." 
-                : $e->getMessage();
+
+            $error_message =
+                "An error occurred while saving the appointment. Please try again.";
+
+        } catch (Exception $e) {
+
+            error_log("Appointment Error: " . $e->getMessage());
+
+            $error_message = $e->getMessage();
         }
     }
 }
@@ -214,6 +398,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .form-grid {
       grid-template-columns: 1fr;
     }
+
     .form-group.full-width {
       grid-column: span 1;
     }
@@ -226,92 +411,174 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 
 <div class="form-container">
+
   <?php if (!empty($success_message)): ?>
     <div class="alert alert-success">
-      <i class="fa-solid fa-circle-check"></i> <?php echo htmlspecialchars($success_message, ENT_QUOTES, 'UTF-8'); ?>
+      <i class="fa-solid fa-circle-check"></i>
+      <?php echo htmlspecialchars($success_message, ENT_QUOTES, 'UTF-8'); ?>
     </div>
   <?php endif; ?>
+
 
   <?php if (!empty($error_message)): ?>
     <div class="alert alert-danger">
-      <i class="fa-solid fa-circle-exclamation"></i> <?php echo htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8'); ?>
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <?php echo htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8'); ?>
     </div>
   <?php endif; ?>
 
+
   <form action="" method="POST">
+
     <div class="form-grid">
-      
+
+      <!-- PATIENT -->
       <div class="form-group">
         <label for="patient_id">Select Patient *</label>
+
         <select id="patient_id" name="patient_id" required>
+
           <option value="">-- Choose Patient --</option>
+
           <?php foreach ($patients as $p): ?>
-            <option value="<?php echo htmlspecialchars($p['patient_id'], ENT_QUOTES, 'UTF-8'); ?>"
-              <?php echo ($patient_id == $p['patient_id']) ? 'selected' : ''; ?>>
+
+            <option
+              value="<?php echo htmlspecialchars($p['patient_id'], ENT_QUOTES, 'UTF-8'); ?>"
+              <?php echo ($patient_id == $p['patient_id']) ? 'selected' : ''; ?>
+            >
               <?php echo htmlspecialchars($p['full_name'], ENT_QUOTES, 'UTF-8'); ?>
             </option>
+
           <?php endforeach; ?>
+
         </select>
       </div>
 
+
+      <!-- DENTIST -->
       <div class="form-group">
         <label for="dentist_id">Assigned Dentist *</label>
+
         <select id="dentist_id" name="dentist_id" required>
+
           <option value="">-- Choose Dentist --</option>
+
           <?php foreach ($dentists as $d): ?>
-            <option value="<?php echo htmlspecialchars($d['dentist_id'], ENT_QUOTES, 'UTF-8'); ?>"
-              <?php echo ($dentist_id == $d['dentist_id']) ? 'selected' : ''; ?>>
+
+            <option
+              value="<?php echo htmlspecialchars($d['dentist_id'], ENT_QUOTES, 'UTF-8'); ?>"
+              <?php echo ($dentist_id == $d['dentist_id']) ? 'selected' : ''; ?>
+            >
               <?php echo htmlspecialchars($d['full_name'], ENT_QUOTES, 'UTF-8'); ?>
             </option>
+
           <?php endforeach; ?>
+
         </select>
       </div>
 
+
+      <!-- DATE -->
       <div class="form-group">
         <label for="appointment_date">Date *</label>
-        <input type="date" id="appointment_date" name="appointment_date" required 
-               min="<?php echo date('Y-m-d'); ?>" 
-               value="<?php echo htmlspecialchars($appointment_date, ENT_QUOTES, 'UTF-8'); ?>">
+
+        <input
+          type="date"
+          id="appointment_date"
+          name="appointment_date"
+          required
+          min="<?php echo date('Y-m-d'); ?>"
+          value="<?php echo htmlspecialchars($appointment_date, ENT_QUOTES, 'UTF-8'); ?>"
+        >
       </div>
 
+
+      <!-- TIME -->
       <div class="form-group">
         <label for="appointment_time">Time *</label>
-        <input type="time" id="appointment_time" name="appointment_time" required 
-               value="<?php echo htmlspecialchars($appointment_time, ENT_QUOTES, 'UTF-8'); ?>">
+
+        <input
+          type="time"
+          id="appointment_time"
+          name="appointment_time"
+          required
+          value="<?php echo htmlspecialchars($appointment_time, ENT_QUOTES, 'UTF-8'); ?>"
+        >
       </div>
 
+
+      <!-- PROCEDURE -->
       <div class="form-group">
         <label for="procedure_name">Procedure *</label>
-        <input type="text" id="procedure_name" name="procedure_name" required 
-               placeholder="e.g. Tooth Extraction, Cleaning, Braces Adjustment" 
-               value="<?php echo htmlspecialchars($procedure_name, ENT_QUOTES, 'UTF-8'); ?>">
+
+        <input
+          type="text"
+          id="procedure_name"
+          name="procedure_name"
+          required
+          placeholder="e.g. Tooth Extraction, Cleaning, Braces Adjustment"
+          value="<?php echo htmlspecialchars($procedure_name, ENT_QUOTES, 'UTF-8'); ?>"
+        >
       </div>
 
+
+      <!-- STATUS -->
       <div class="form-group">
         <label for="status">Status</label>
+
         <select id="status" name="status">
+
           <?php foreach ($allowed_statuses as $st): ?>
-            <option value="<?php echo $st; ?>" <?php echo ($status === $st) ? 'selected' : ''; ?>>
-              <?php echo ucfirst($st); ?>
+
+            <option
+              value="<?php echo htmlspecialchars($st, ENT_QUOTES, 'UTF-8'); ?>"
+              <?php echo ($status === $st) ? 'selected' : ''; ?>
+            >
+              <?php echo ucwords(str_replace('_', ' ', $st)); ?>
             </option>
+
           <?php endforeach; ?>
+
         </select>
       </div>
 
+
+      <!-- REASON -->
       <div class="form-group full-width">
-        <label for="reason">Reason / Notes (Include 'walk-in' here if applicable)</label>
-        <textarea id="reason" name="reason" rows="3" placeholder="Specify any symptoms or special instructions..."><?php echo htmlspecialchars($reason, ENT_QUOTES, 'UTF-8'); ?></textarea>
+
+        <label for="reason">
+          Reason / Notes
+        </label>
+
+        <textarea
+          id="reason"
+          name="reason"
+          rows="3"
+          placeholder="Specify any symptoms or special instructions..."
+        ><?php echo htmlspecialchars($reason, ENT_QUOTES, 'UTF-8'); ?></textarea>
+
       </div>
 
     </div>
 
+
+    <!-- ACTIONS -->
     <div class="form-actions">
-      <a href="appointments.php" class="btn btn-secondary">Cancel</a>
+
+      <a href="appointments.php" class="btn btn-secondary">
+        Cancel
+      </a>
+
       <button type="submit" class="btn btn-primary">
-        <i class="fa-solid fa-calendar-plus"></i> Save Appointment
+        <i class="fa-solid fa-calendar-plus"></i>
+        Save Appointment
       </button>
+
     </div>
+
   </form>
+
 </div>
+
 
 <?php include __DIR__ . '/includes/footer.php'; ?>
