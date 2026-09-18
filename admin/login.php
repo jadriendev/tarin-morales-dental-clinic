@@ -80,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $_SESSION['full_name'] = $admin['first_name'] . ' ' . $admin['last_name'];
     $_SESSION['role']      = 'admin';
 
-    header("Location: dashboard.php");
+    header("Location: dashboard/dashboard.php");
     exit();
 }
 

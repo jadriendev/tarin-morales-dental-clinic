@@ -26,29 +26,21 @@ $admin_id   = $_SESSION['admin_id'] ?? null;
 $admin_name = $_SESSION['full_name'] ?? "Admin";
 
 
-if (isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 'admin') {
-    $user_id = $_SESSION['user_id'];
-
+if (isset($_SESSION['admin_id']) && ($_SESSION['role'] ?? '') === 'admin') {
     $sql = "
         SELECT admin_id, CONCAT(first_name, ' ', last_name) AS full_name 
         FROM tbl_admins 
-        WHERE user_id = :user_id " . ($admin_id !== null ? "OR admin_id = :admin_id " : "") . "
+        WHERE admin_id = :admin_id 
         LIMIT 1
     ";
 
-    $params = ['user_id' => $user_id];
-    if ($admin_id !== null) {
-        $params['admin_id'] = $admin_id;
-    }
-
     $stmtAdmin = $pdo->prepare($sql);
-    $stmtAdmin->execute($params);
+    $stmtAdmin->execute(['admin_id' => $_SESSION['admin_id']]);
     $admin_data = $stmtAdmin->fetch();
 
     if ($admin_data) {
         $admin_id   = $admin_data['admin_id'];
         $admin_name = $admin_data['full_name'];
-        $_SESSION['admin_id'] = $admin_id;
     }
 }
 
