@@ -350,7 +350,6 @@ $admin_display_name = $_SESSION['admin_name'] ?? $admin_name ?? 'Admin';
       text-decoration: underline;
     }
 
-    /* Table Container Responsiveness */
     .table-container {
       width: 100%;
       overflow-x: auto;
@@ -408,16 +407,12 @@ $admin_display_name = $_SESSION['admin_name'] ?? $admin_name ?? 'Admin';
       text-transform: capitalize;
     }
 
-    /* Status Badges */
     .status.active, .status.confirmed { background: var(--status-confirmed-bg); color: var(--status-confirmed-text); }
     .status.pending { background: var(--status-pending-bg); color: var(--status-pending-text); }
     .status.in_progress, .status.for_dentist { background: var(--status-progress-bg); color: var(--status-progress-text); }
     .status.completed { background: var(--status-completed-bg); color: var(--status-completed-text); }
     .status.cancelled, .status.no_show, .status.inactive { background: var(--status-cancelled-bg); color: var(--status-cancelled-text); }
 
-    /* ==========================================================================
-       RESPONSIVE BREAKPOINTS (Laptops, Tablets, Mobile)
-       ========================================================================== */
     @media (max-width: 1200px) {
       .stats {
         grid-template-columns: repeat(2, 1fr) !important;

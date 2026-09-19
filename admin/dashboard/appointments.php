@@ -44,7 +44,7 @@ $all_appointments = $stmtApp->fetchAll(PDO::FETCH_ASSOC);
         <?php if (!empty($all_appointments)): ?>
           <?php foreach ($all_appointments as $app): ?>
             <tr>
-              <td>#<?php echo htmlspecialchars((string)$app['appointment_id'], ENT_QUOTES, 'UTF-8'); ?></td>
+              <td><?php echo htmlspecialchars((string)$app['appointment_id'], ENT_QUOTES, 'UTF-8'); ?></td>
               <td class="patient-cell"><?php echo htmlspecialchars($app['patient'] ?? 'Unknown', ENT_QUOTES, 'UTF-8'); ?></td>
               <td><?php echo htmlspecialchars($app['appointment_date'], ENT_QUOTES, 'UTF-8'); ?></td>
               <td><?php echo htmlspecialchars($app['time'] ?? 'N/A', ENT_QUOTES, 'UTF-8'); ?></td>
