@@ -113,7 +113,7 @@ $isLoggedInAdmin = isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 
 </style>
 
 </head>
-<body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#5FC0F0] via-white to-[#C24FE0] px-4">
+<body class="min-h-screen flex items-center justify-center bg-white px-4">
 
 <div class="w-full max-w-md bg-white/90 backdrop-blur rounded-2xl shadow-xl border border-[#5FC0F0]/40 p-8">
 

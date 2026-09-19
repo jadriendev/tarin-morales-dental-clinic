@@ -36,69 +36,99 @@ if (empty($_SESSION['csrf_token'])) {
 
 $csrfToken = $_SESSION['csrf_token'];
 
-// Login form submission
+
+/// =========================
+// LOGIN
+// =========================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    $validCsrf = hash_equals(
-        $_SESSION['csrf_token'],
-        $_POST['csrf_token'] ?? ''
-    );
-
-    $inputUserId = trim($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
+    $postedToken = $_POST['csrf_token'] ?? '';
 
     if (
-        !$validCsrf ||
-        $inputUserId === '' ||
-        !ctype_digit($inputUserId) ||
-        $password === ''
+        empty($_SESSION['csrf_token']) ||
+        !hash_equals($_SESSION['csrf_token'], $postedToken)
     ) {
-        header("Location: login.php?error=invalid_credentials");
-        exit();
+        die("CSRF TOKEN ERROR. Please refresh the login page and try again.");
     }
 
+    $username = trim($_POST['username'] ?? '');
+    $password = $_POST['password'] ?? '';
+
+    if ($username === '') {
+        die("ERROR: Username is empty.");
+    }
+
+    if ($password === '') {
+        die("ERROR: Password is empty.");
+    }
+
+    // Check database connection
+    if (!isset($pdo) || !($pdo instanceof PDO)) {
+        die("ERROR: \$pdo is not available. Check your db.php.");
+    }
+
+    // Find user by USERNAME
     $stmt = $pdo->prepare("
         SELECT user_id, email, username, password, role, status
         FROM tbl_users
-        WHERE user_id = :user_id
+        WHERE username = :username
         LIMIT 1
     ");
 
     $stmt->execute([
-        'user_id' => $inputUserId
+        ':username' => $username
     ]);
 
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$user || !password_verify($password, $user['password'])) {
-        header("Location: login.php?error=invalid_credentials");
-        exit();
+    // User does not exist
+    if (!$user) {
+        die(
+            "ERROR: USERNAME NOT FOUND.<br><br>" .
+            "Username entered: " . htmlspecialchars($username)
+        );
     }
 
-    if ($user['role'] !== 'patient') {
-        header("Location: login.php?error=invalid_credentials");
-        exit();
+    // Check password
+    if (!password_verify($password, $user['password'])) {
+        die("ERROR: PASSWORD DOES NOT MATCH.");
     }
 
-    if ($user['status'] !== 'active') {
-        header("Location: login.php?error=account_inactive");
-        exit();
+    // Check role
+    if (strtolower(trim($user['role'])) !== 'patient') {
+        die(
+            "ERROR: ACCOUNT ROLE IS NOT PATIENT.<br><br>" .
+            "Current role: " . htmlspecialchars($user['role'])
+        );
     }
 
+    // Check status
+    if (strtolower(trim($user['status'])) !== 'active') {
+        die(
+            "ERROR: ACCOUNT IS NOT ACTIVE.<br><br>" .
+            "Current status: " . htmlspecialchars($user['status'])
+        );
+    }
+
+    // Login successful
     session_regenerate_id(true);
-
-    unset($_SESSION['csrf_token']);
 
     $_SESSION['user_id'] = $user['user_id'];
     $_SESSION['email'] = $user['email'];
     $_SESSION['username'] = $user['username'];
     $_SESSION['role'] = $user['role'];
 
+    // New CSRF token
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+
     header("Location: user-dashboard.php");
     exit();
 }
 
-// Error message for the view
+
+// =========================
+// ERROR MESSAGE
+// =========================
 $errors = [
     'account_inactive' => 'Your account is inactive. Please contact the system administrator.',
     'invalid_credentials' => 'Invalid User ID or password.',
@@ -109,6 +139,10 @@ $error = isset($_GET['error'])
     ? ($errors[$_GET['error']] ?? 'An error occurred. Please try again.')
     : '';
 
+
+// =========================
+// CHECK LOGIN
+// =========================
 $isLoggedInUser =
     isset($_SESSION['user_id']) &&
     ($_SESSION['role'] ?? '') === 'patient';
@@ -127,7 +161,6 @@ $isLoggedInUser =
 <link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Bebas+Neue&family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,100..900&family=Manrope:wght@200..800&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Quattrocento:wght@400;700&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css" integrity="sha512-QeR2VH+lsBE5LSAe1Q5EnTBbe7XTBubt8dG93Y7gidSgdMCr8nVqKcfKAMyN96SV8KDbZVTDXChatu5G2KQGzg==" crossorigin="anonymous" referrerpolicy="no-referrer">
-
 <link rel="shortcut icon" href="../images/logo.jpg" type="image/x-icon">
 
 <script src="https://cdn.tailwindcss.com"></script>
@@ -298,4 +331,3 @@ $isLoggedInUser =
 
 </body>
 </html>
-```
