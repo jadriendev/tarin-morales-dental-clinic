@@ -99,7 +99,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
     .app-container {
       width: 100%;
-      max-width: 1600px;
       display: flex;
       position: relative;
       background: var(--bg-main);
