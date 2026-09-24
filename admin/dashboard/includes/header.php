@@ -67,7 +67,6 @@ $admin_display_name = $_SESSION['admin_name'] ?? $admin_name ?? 'Admin';
 
     .app-container {
       width: 100%;
-      max-width: 1600px;
       display: flex;
       position: relative;
       background: var(--bg-main);
