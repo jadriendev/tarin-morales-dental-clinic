@@ -7,18 +7,19 @@ $header_title = "Add New Dentist";
 include __DIR__ . '/includes/header.php';
 
 $success_message = '';
-$error_message   = '';
+$error_message = '';
 
-$allowed_statuses = ['Active', 'Inactive'];
+$allowed_statuses = ['active', 'inactive'];
 
 $username       = $_POST['username'] ?? '';
 $first_name     = $_POST['first_name'] ?? '';
 $last_name      = $_POST['last_name'] ?? '';
 $license_no     = $_POST['license_no'] ?? '';
 $specialization = $_POST['specialization'] ?? '';
-$status         = $_POST['status'] ?? 'Active';
+$status         = $_POST['status'] ?? 'active';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
     $username       = trim($username);
     $first_name     = trim($first_name);
     $last_name      = trim($last_name);
@@ -27,51 +28,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password       = $_POST['password'] ?? '';
     $status         = trim($status);
 
-    if (empty($username) || empty($first_name) || empty($last_name) || empty($license_no) || empty($password)) {
+    if (
+        empty($username) ||
+        empty($first_name) ||
+        empty($last_name) ||
+        empty($license_no) ||
+        empty($password)
+    ) {
+
         $error_message = "Please fill in all required fields (Username, First Name, Last Name, License No., and Password).";
+
     } elseif (strlen($password) < 6) {
+
         $error_message = "Password must be at least 6 characters long.";
+
     } elseif (!in_array($status, $allowed_statuses, true)) {
+
         $error_message = "Invalid status selected.";
+
     } else {
+
         try {
+
             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
             $stmtDentist = $pdo->prepare("
-                INSERT INTO tbl_dentists (username, password, first_name, last_name, license_no, specialization, status) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tbl_dentists (
+                    username,
+                    password,
+                    first_name,
+                    last_name,
+                    license_no,
+                    specialization,
+                    status
+                )
+                VALUES (
+                    :username,
+                    :password,
+                    :first_name,
+                    :last_name,
+                    :license_no,
+                    :specialization,
+                    :status
+                )
             ");
+
             $stmtDentist->execute([
-                $username,
-                $hashed_password,
-                $first_name,
-                $last_name,
-                $license_no,
-                $specialization ?: 'General Dentistry',
-                $status
+                ':username'       => $username,
+                ':password'       => $hashed_password,
+                ':first_name'     => $first_name,
+                ':last_name'      => $last_name,
+                ':license_no'     => $license_no,
+                ':specialization' => $specialization !== '' ? $specialization : null,
+                ':status'         => $status
             ]);
 
             header("Location: dentists.php?msg=added");
             exit;
 
         } catch (PDOException $e) {
+
             error_log("Database Error (Add Dentist): " . $e->getMessage());
 
-            // Check for MySQL duplicate key error (1062)
-            if ($e->getCode() === '23000' && strpos($e->getMessage(), '1062') !== false) {
-                if (strpos($e->getMessage(), 'username') !== false) {
-                    $error_message = "The username '{$username}' is already registered.";
-                } elseif (strpos($e->getMessage(), 'license_no') !== false) {
+            if ($e->getCode() === '23000') {
+
+                if (
+                    strpos($e->getMessage(), 'license_no') !== false ||
+                    strpos($e->getMessage(), '1062') !== false
+                ) {
                     $error_message = "The license number '{$license_no}' is already registered.";
                 } else {
-                    $error_message = "A record with this information already exists.";
+                    $error_message = "A database constraint was violated. Please check the information entered.";
                 }
+
             } else {
-                $error_message = "Database Error: " . $e->getMessage();
+
+                $error_message = "An error occurred while saving the dentist. Please try again.";
             }
+
         } catch (Exception $e) {
+
             error_log("System Error (Add Dentist): " . $e->getMessage());
-            $error_message = "System Error: " . $e->getMessage();
+
+            $error_message = "An unexpected error occurred. Please try again.";
         }
     }
 }
@@ -192,6 +231,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .form-grid {
       grid-template-columns: 1fr;
     }
+
     .form-group.full-width {
       grid-column: span 1;
     }
@@ -204,68 +244,129 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 
 <div class="form-container">
+
   <?php if (!empty($success_message)): ?>
     <div class="alert alert-success">
-      <i class="fa-solid fa-circle-check"></i> <?php echo htmlspecialchars($success_message, ENT_QUOTES, 'UTF-8'); ?>
+      <i class="fa-solid fa-circle-check"></i>
+      <?php echo htmlspecialchars($success_message, ENT_QUOTES, 'UTF-8'); ?>
     </div>
   <?php endif; ?>
 
   <?php if (!empty($error_message)): ?>
     <div class="alert alert-danger">
-      <i class="fa-solid fa-circle-exclamation"></i> <?php echo htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8'); ?>
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <?php echo htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8'); ?>
     </div>
   <?php endif; ?>
 
   <form action="" method="POST">
+
     <div class="form-grid">
+
       <div class="form-group">
         <label for="username">Username *</label>
-        <input type="text" id="username" name="username" value="<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>" required placeholder="e.g. drsmith">
+        <input
+          type="text"
+          id="username"
+          name="username"
+          value="<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>"
+          required
+          placeholder="e.g. drsmith"
+        >
       </div>
 
       <div class="form-group">
         <label for="password">Account Password *</label>
-        <input type="password" id="password" name="password" required placeholder="Minimum 6 characters">
+        <input
+          type="password"
+          id="password"
+          name="password"
+          required
+          placeholder="Minimum 6 characters"
+        >
       </div>
 
       <div class="form-group">
         <label for="first_name">First Name *</label>
-        <input type="text" id="first_name" name="first_name" value="<?php echo htmlspecialchars($first_name, ENT_QUOTES, 'UTF-8'); ?>" required placeholder="e.g. Jane">
+        <input
+          type="text"
+          id="first_name"
+          name="first_name"
+          value="<?php echo htmlspecialchars($first_name, ENT_QUOTES, 'UTF-8'); ?>"
+          required
+          placeholder="e.g. Jane"
+        >
       </div>
 
       <div class="form-group">
         <label for="last_name">Last Name *</label>
-        <input type="text" id="last_name" name="last_name" value="<?php echo htmlspecialchars($last_name, ENT_QUOTES, 'UTF-8'); ?>" required placeholder="e.g. Smith">
+        <input
+          type="text"
+          id="last_name"
+          name="last_name"
+          value="<?php echo htmlspecialchars($last_name, ENT_QUOTES, 'UTF-8'); ?>"
+          required
+          placeholder="e.g. Smith"
+        >
       </div>
 
       <div class="form-group">
         <label for="license_no">License No. *</label>
-        <input type="text" id="license_no" name="license_no" value="<?php echo htmlspecialchars($license_no, ENT_QUOTES, 'UTF-8'); ?>" required placeholder="e.g. DENT-12345">
+        <input
+          type="text"
+          id="license_no"
+          name="license_no"
+          value="<?php echo htmlspecialchars($license_no, ENT_QUOTES, 'UTF-8'); ?>"
+          required
+          placeholder="e.g. DENT-12345"
+        >
       </div>
 
       <div class="form-group">
         <label for="specialization">Specialization</label>
-        <input type="text" id="specialization" name="specialization" value="<?php echo htmlspecialchars($specialization, ENT_QUOTES, 'UTF-8'); ?>" placeholder="e.g. Orthodontics, General Dentistry">
+        <input
+          type="text"
+          id="specialization"
+          name="specialization"
+          value="<?php echo htmlspecialchars($specialization, ENT_QUOTES, 'UTF-8'); ?>"
+          placeholder="e.g. Orthodontics, General Dentistry"
+        >
       </div>
 
       <div class="form-group full-width">
         <label for="status">Status</label>
+
         <select id="status" name="status">
+
           <?php foreach ($allowed_statuses as $st): ?>
-            <option value="<?php echo $st; ?>" <?php echo ($status === $st) ? 'selected' : ''; ?>>
-              <?php echo $st; ?>
+
+            <option
+              value="<?php echo htmlspecialchars($st, ENT_QUOTES, 'UTF-8'); ?>"
+              <?php echo ($status === $st) ? 'selected' : ''; ?>
+            >
+              <?php echo ucfirst($st); ?>
             </option>
+
           <?php endforeach; ?>
+
         </select>
       </div>
+
     </div>
 
     <div class="form-actions">
-      <a href="dentists.php" class="btn btn-secondary">Cancel</a>
+
+      <a href="dentists.php" class="btn btn-secondary">
+        Cancel
+      </a>
+
       <button type="submit" class="btn btn-primary">
-        <i class="fa-solid fa-user-doctor"></i> Save Dentist
+        <i class="fa-solid fa-user-doctor"></i>
+        Save Dentist
       </button>
+
     </div>
+
   </form>
 </div>
 

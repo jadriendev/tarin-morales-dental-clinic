@@ -3,88 +3,61 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+require_once __DIR__ . '/../db.php';
+
 $page_title = "Edit Dentist";
 $header_title = "Edit Dentist Profile";
 
-// Validate Dentist ID
 $dentist_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
-// CSRF token
+if (!$dentist_id) {
+    header("Location: dentists.php");
+    exit;
+}
+
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-
-// Database connection
-$db_paths = [
-    __DIR__ . '/db.php',
-    __DIR__ . '/includes/db.php',
-    __DIR__ . '/../db.php',
-    __DIR__ . '/../includes/db.php',
-];
-
-foreach ($db_paths as $path) {
-    if (file_exists($path)) {
-        include_once $path;
-        break;
-    }
-}
-
-// Header
-$header_paths = [
-    __DIR__ . '/includes/header.php',
-    __DIR__ . '/header.php',
-    __DIR__ . '/../includes/header.php',
-];
-
-foreach ($header_paths as $path) {
-    if (file_exists($path)) {
-        include_once $path;
-        break;
-    }
 }
 
 $success_message = '';
 $error_message = '';
 $dentist = null;
 
-// Redirect if ID is invalid
-if (!$dentist_id) {
-    header("Location: dentists.php");
-    exit;
-}
+try {
 
-// Check database
-if (!isset($pdo)) {
-    $error_message = "Database connection unavailable.";
-} else {
+    $stmt = $pdo->prepare("
+        SELECT
+            dentist_id,
+            username,
+            password,
+            first_name,
+            last_name,
+            license_no,
+            specialization,
+            status
+        FROM tbl_dentists
+        WHERE dentist_id = :dentist_id
+        LIMIT 1
+    ");
 
-    // Fetch dentist
-    try {
+    $stmt->execute([
+        ':dentist_id' => $dentist_id
+    ]);
 
-        $stmt = $pdo->prepare("
-            SELECT *
-            FROM tbl_dentists
-            WHERE dentist_id = ?
-        ");
+    $dentist = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        $stmt->execute([$dentist_id]);
-
-        $dentist = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$dentist) {
-            $error_message = "Dentist record not found.";
-        }
-
-    } catch (PDOException $e) {
-
-        error_log($e->getMessage());
-        $error_message = "Failed to load dentist record: " . $e->getMessage();
+    if (!$dentist) {
+        $error_message = "Dentist record not found.";
     }
+
+} catch (PDOException $e) {
+
+    error_log("Database Error (Load Dentist): " . $e->getMessage());
+
+    $error_message = "Failed to load dentist record. Please try again.";
 }
 
-
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist) {
 
     $csrf_token = $_POST['csrf_token'] ?? '';
 
@@ -99,12 +72,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
         $specialization = trim($_POST['specialization'] ?? '');
         $license_no = trim($_POST['license_no'] ?? '');
         $status = trim($_POST['status'] ?? 'active');
-        $password = trim($_POST['password'] ?? '');
+        $password = $_POST['password'] ?? '';
 
-        // Validate required fields
-        if ($first_name === '' || $last_name === '' || $license_no === '') {
+        if (
+            $first_name === '' ||
+            $last_name === '' ||
+            $license_no === ''
+        ) {
 
             $error_message = "Please fill in all required fields.";
+
+        } elseif (strlen($first_name) > 100) {
+
+            $error_message = "First name must not exceed 100 characters.";
+
+        } elseif (strlen($last_name) > 100) {
+
+            $error_message = "Last name must not exceed 100 characters.";
+
+        } elseif (strlen($license_no) > 50) {
+
+            $error_message = "License number must not exceed 50 characters.";
+
+        } elseif (strlen($specialization) > 100) {
+
+            $error_message = "Specialization must not exceed 100 characters.";
 
         } elseif (!in_array($status, ['active', 'inactive'], true)) {
 
@@ -114,76 +106,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
 
             try {
 
-                $pdo->beginTransaction();
-
-                /*
-                 * Update dentist
-                 *
-                 * IMPORTANT:
-                 * Database uses license_no, NOT license_number.
-                 */
-                $stmt = $pdo->prepare("
-                    UPDATE tbl_dentists
-                    SET
-                        first_name = ?,
-                        last_name = ?,
-                        specialization = ?,
-                        license_no = ?,
-                        status = ?
-                    WHERE dentist_id = ?
+                $stmtLicense = $pdo->prepare("
+                    SELECT dentist_id
+                    FROM tbl_dentists
+                    WHERE license_no = :license_no
+                    AND dentist_id != :dentist_id
+                    LIMIT 1
                 ");
 
-                $stmt->execute([
-                    $first_name,
-                    $last_name,
-                    $specialization !== '' ? $specialization : null,
-                    $license_no,
-                    $status,
-                    $dentist_id
+                $stmtLicense->execute([
+                    ':license_no' => $license_no,
+                    ':dentist_id' => $dentist_id
                 ]);
 
+                if ($stmtLicense->fetch()) {
 
-                /*
-                 * Update dentist password
-                 *
-                 * tbl_dentists itself contains:
-                 * username
-                 * password
-                 *
-                 * So we update the password directly here.
-                 */
-                if ($password !== '') {
+                    $error_message = "The license number is already assigned to another dentist.";
 
-                    $hashed_password = password_hash(
-                        $password,
-                        PASSWORD_BCRYPT
-                    );
+                } else {
 
-                    $stmt = $pdo->prepare("
-                        UPDATE tbl_dentists
-                        SET password = ?
-                        WHERE dentist_id = ?
-                    ");
+                    if ($password !== '' && strlen($password) < 8) {
 
-                    $stmt->execute([
-                        $hashed_password,
-                        $dentist_id
-                    ]);
+                        $error_message = "Password must be at least 8 characters long.";
+
+                    } else {
+
+                        $pdo->beginTransaction();
+
+                        $stmtUpdate = $pdo->prepare("
+                            UPDATE tbl_dentists
+                            SET
+                                first_name = :first_name,
+                                last_name = :last_name,
+                                specialization = :specialization,
+                                license_no = :license_no,
+                                status = :status
+                            WHERE dentist_id = :dentist_id
+                        ");
+
+                        $stmtUpdate->execute([
+                            ':first_name' => $first_name,
+                            ':last_name' => $last_name,
+                            ':specialization' => $specialization !== ''
+                                ? $specialization
+                                : null,
+                            ':license_no' => $license_no,
+                            ':status' => $status,
+                            ':dentist_id' => $dentist_id
+                        ]);
+
+                        if ($password !== '') {
+
+                            $hashed_password = password_hash(
+                                $password,
+                                PASSWORD_DEFAULT
+                            );
+
+                            $stmtPassword = $pdo->prepare("
+                                UPDATE tbl_dentists
+                                SET password = :password
+                                WHERE dentist_id = :dentist_id
+                            ");
+
+                            $stmtPassword->execute([
+                                ':password' => $hashed_password,
+                                ':dentist_id' => $dentist_id
+                            ]);
+                        }
+
+                        $pdo->commit();
+
+                        $success_message = "Dentist updated successfully.";
+
+                        $dentist['first_name'] = $first_name;
+                        $dentist['last_name'] = $last_name;
+                        $dentist['specialization'] = $specialization;
+                        $dentist['license_no'] = $license_no;
+                        $dentist['status'] = $status;
+                    }
                 }
-
-
-                $pdo->commit();
-
-                $success_message = "Dentist updated successfully!";
-
-
-                // Update displayed values
-                $dentist['first_name'] = $first_name;
-                $dentist['last_name'] = $last_name;
-                $dentist['specialization'] = $specialization;
-                $dentist['license_no'] = $license_no;
-                $dentist['status'] = $status;
-
 
             } catch (PDOException $e) {
 
@@ -191,15 +192,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
                     $pdo->rollBack();
                 }
 
-                error_log($e->getMessage());
+                error_log("Database Error (Update Dentist): " . $e->getMessage());
 
-                $error_message =
-                    "An error occurred while updating: " .
-                    $e->getMessage();
+                $error_message = "An error occurred while updating the dentist. Please try again.";
             }
         }
     }
 }
+
+include __DIR__ . '/includes/header.php';
 ?>
 
 <style>
@@ -315,11 +316,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
   }
 
   @media (max-width: 768px) {
-
     .form-grid {
       grid-template-columns: 1fr;
     }
-
   }
 </style>
 
@@ -345,7 +344,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
 
   <?php endif; ?>
 
-
   <?php if (!empty($error_message)): ?>
 
     <div class="alert alert-danger">
@@ -361,7 +359,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
 
   <?php endif; ?>
 
-
   <?php if ($dentist): ?>
 
     <form action="" method="POST">
@@ -369,16 +366,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
       <input
         type="hidden"
         name="csrf_token"
-        value="<?php echo htmlspecialchars(
+        value="<?php
+        echo htmlspecialchars(
             $_SESSION['csrf_token'],
             ENT_QUOTES,
             'UTF-8'
-        ); ?>"
+        );
+        ?>"
       >
 
       <div class="form-grid">
 
-        <!-- First Name -->
         <div class="form-group">
 
           <label for="first_name">
@@ -389,18 +387,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
             type="text"
             id="first_name"
             name="first_name"
-            value="<?php echo htmlspecialchars(
+            value="<?php
+            echo htmlspecialchars(
                 $dentist['first_name'] ?? '',
                 ENT_QUOTES,
                 'UTF-8'
-            ); ?>"
+            );
+            ?>"
+            maxlength="100"
             required
           >
 
         </div>
 
-
-        <!-- Last Name -->
         <div class="form-group">
 
           <label for="last_name">
@@ -411,18 +410,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
             type="text"
             id="last_name"
             name="last_name"
-            value="<?php echo htmlspecialchars(
+            value="<?php
+            echo htmlspecialchars(
                 $dentist['last_name'] ?? '',
                 ENT_QUOTES,
                 'UTF-8'
-            ); ?>"
+            );
+            ?>"
+            maxlength="100"
             required
           >
 
         </div>
 
-
-        <!-- Specialization -->
         <div class="form-group">
 
           <label for="specialization">
@@ -433,18 +433,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
             type="text"
             id="specialization"
             name="specialization"
-            value="<?php echo htmlspecialchars(
+            value="<?php
+            echo htmlspecialchars(
                 $dentist['specialization'] ?? '',
                 ENT_QUOTES,
                 'UTF-8'
-            ); ?>"
+            );
+            ?>"
+            maxlength="100"
             placeholder="e.g. General Dentistry, Orthodontics, Root Canal"
           >
 
         </div>
 
-
-        <!-- License -->
         <div class="form-group">
 
           <label for="license_no">
@@ -455,19 +456,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
             type="text"
             id="license_no"
             name="license_no"
-            value="<?php echo htmlspecialchars(
+            value="<?php
+            echo htmlspecialchars(
                 $dentist['license_no'] ?? '',
                 ENT_QUOTES,
                 'UTF-8'
-            ); ?>"
+            );
+            ?>"
+            maxlength="50"
             placeholder="e.g. PRC-0123456"
             required
           >
 
         </div>
 
-
-        <!-- Status -->
         <div class="form-group">
 
           <label for="status">
@@ -481,18 +483,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
 
             <option
               value="active"
-              <?php echo (($dentist['status'] ?? 'active') === 'active')
-                ? 'selected'
-                : ''; ?>
+              <?php
+              echo (($dentist['status'] ?? 'active') === 'active')
+                  ? 'selected'
+                  : '';
+              ?>
             >
               Active
             </option>
 
             <option
               value="inactive"
-              <?php echo (($dentist['status'] ?? '') === 'inactive')
-                ? 'selected'
-                : ''; ?>
+              <?php
+              echo (($dentist['status'] ?? '') === 'inactive')
+                  ? 'selected'
+                  : '';
+              ?>
             >
               Inactive
             </option>
@@ -501,8 +507,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
 
         </div>
 
-
-        <!-- Password -->
         <div class="form-group">
 
           <label for="password">
@@ -513,17 +517,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
             type="password"
             id="password"
             name="password"
+            minlength="8"
             placeholder="Leave blank to keep current password"
           >
 
           <span class="form-hint">
-            Only enter a new password if you want to change it.
+            Leave blank if you do not want to change the password.
           </span>
 
         </div>
 
       </div>
-
 
       <div class="form-actions">
 
@@ -563,21 +567,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist && isset($pdo)) {
 
 </div>
 
-<?php
-
-$footer_paths = [
-    __DIR__ . '/includes/footer.php',
-    __DIR__ . '/footer.php',
-    __DIR__ . '/../includes/footer.php',
-];
-
-foreach ($footer_paths as $f_path) {
-
-    if (file_exists($f_path)) {
-        include_once $f_path;
-        break;
-    }
-
-}
-
-?>
+<?php include __DIR__ . '/includes/footer.php'; ?>

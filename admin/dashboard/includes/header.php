@@ -1,22 +1,53 @@
 <?php
-require_once __DIR__ . '/../../db.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+require_once __DIR__ . '/../../db.php';
+
 $admin_display_name = $_SESSION['admin_name'] ?? $admin_name ?? 'Admin';
+
+$current_page = basename($_SERVER['PHP_SELF']);
+
 ?>
+
 <!doctype html>
+
 <html lang="en">
+
 <head>
+
   <meta charset="utf-8">
+
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title><?php echo isset($page_title) ? htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8') . ' - Tarin-Morales Dental Clinic' : 'Tarin-Morales Dental Clinic'; ?></title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="shortcut icon" href="../../images/logo.jpg" type="image/x-icon">
+
+  <title>
+    <?php
+    echo isset($page_title)
+        ? htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8') . ' - Tarin-Morales Dental Clinic'
+        : 'Tarin-Morales Dental Clinic';
+    ?>
+  </title>
+
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+  >
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  >
+
+  <link
+    rel="shortcut icon"
+    href="../../images/logo.jpg"
+    type="image/x-icon"
+  >
+
   <style>
+
     :root {
       --bg-main: #f0f4f8;
       --surface: #ffffff;
@@ -35,7 +66,6 @@ $admin_display_name = $_SESSION['admin_name'] ?? $admin_name ?? 'Admin';
       --radius-sm: 8px;
       --shadow-subtle: 0 4px 20px -2px rgba(147, 51, 234, 0.06);
       --shadow-hover: 0 10px 25px -5px rgba(147, 51, 234, 0.2);
-      
       --status-confirmed-bg: #dcfce7;
       --status-confirmed-text: #15803d;
       --status-pending-bg: #fef9c3;
@@ -48,7 +78,9 @@ $admin_display_name = $_SESSION['admin_name'] ?? $admin_name ?? 'Admin';
       --status-cancelled-text: #b91c1c;
     }
 
-    *, *::before, *::after {
+    *,
+    *::before,
+    *::after {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
@@ -131,7 +163,8 @@ $admin_display_name = $_SESSION['admin_name'] ?? $admin_name ?? 'Admin';
       flex-grow: 1;
     }
 
-    .nav a, .logout a {
+    .nav a,
+    .logout a {
       display: flex;
       align-items: center;
       gap: 14px;
@@ -156,7 +189,8 @@ $admin_display_name = $_SESSION['admin_name'] ?? $admin_name ?? 'Admin';
       box-shadow: 0 6px 16px rgba(147, 51, 234, 0.3);
     }
 
-    .nav i, .logout i {
+    .nav i,
+    .logout i {
       font-size: 16px;
       width: 20px;
       text-align: center;
@@ -244,6 +278,10 @@ $admin_display_name = $_SESSION['admin_name'] ?? $admin_name ?? 'Admin';
       border: 2px solid white;
     }
 
+    .profile-wrapper {
+      position: relative;
+    }
+
     .profile-menu {
       display: flex;
       align-items: center;
@@ -254,6 +292,11 @@ $admin_display_name = $_SESSION['admin_name'] ?? $admin_name ?? 'Admin';
       border: 1px solid rgba(147, 51, 234, 0.2);
       cursor: pointer;
       position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .profile-menu:hover {
+      border-color: rgba(147, 51, 234, 0.4);
     }
 
     .avatar {
@@ -272,6 +315,58 @@ $admin_display_name = $_SESSION['admin_name'] ?? $admin_name ?? 'Admin';
     .profile-menu span {
       font-size: 13px;
       font-weight: 700;
+      color: var(--brand-purple);
+    }
+
+    .profile-arrow {
+      font-size: 10px;
+      color: var(--brand-purple);
+      transition: transform 0.2s ease;
+    }
+
+    .profile-menu.active .profile-arrow {
+      transform: rotate(180deg);
+    }
+
+    .profile-dropdown {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      width: 220px;
+      background: var(--surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.15);
+      padding: 8px;
+      display: none;
+      z-index: 1000;
+    }
+
+    .profile-dropdown.show {
+      display: block;
+    }
+
+    .profile-dropdown a {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 12px;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .profile-dropdown a:hover {
+      background: var(--gradient-subtle);
+      color: var(--brand-purple);
+    }
+
+    .profile-dropdown a i {
+      width: 18px;
+      text-align: center;
       color: var(--brand-purple);
     }
 
@@ -370,7 +465,7 @@ $admin_display_name = $_SESSION['admin_name'] ?? $admin_name ?? 'Admin';
       text-transform: uppercase;
       letter-spacing: 0.5px;
       padding: 12px 16px;
-      border-bottom: 2px solid var(--gradient-subtle);
+      border-bottom: 2px solid var(--border-color);
       background: #faf5ff;
       background-image: linear-gradient(90deg, var(--brand-blue) 0%, var(--brand-purple) 100%);
       -webkit-background-clip: text;
@@ -407,107 +502,300 @@ $admin_display_name = $_SESSION['admin_name'] ?? $admin_name ?? 'Admin';
       text-transform: capitalize;
     }
 
-    .status.active, .status.confirmed { background: var(--status-confirmed-bg); color: var(--status-confirmed-text); }
-    .status.pending { background: var(--status-pending-bg); color: var(--status-pending-text); }
-    .status.in_progress, .status.for_dentist { background: var(--status-progress-bg); color: var(--status-progress-text); }
-    .status.completed { background: var(--status-completed-bg); color: var(--status-completed-text); }
-    .status.cancelled, .status.no_show, .status.inactive { background: var(--status-cancelled-bg); color: var(--status-cancelled-text); }
+    .status.active,
+    .status.confirmed {
+      background: var(--status-confirmed-bg);
+      color: var(--status-confirmed-text);
+    }
+
+    .status.pending {
+      background: var(--status-pending-bg);
+      color: var(--status-pending-text);
+    }
+
+    .status.in_progress,
+    .status.for_dentist {
+      background: var(--status-progress-bg);
+      color: var(--status-progress-text);
+    }
+
+    .status.completed {
+      background: var(--status-completed-bg);
+      color: var(--status-completed-text);
+    }
+
+    .status.cancelled,
+    .status.no_show,
+    .status.inactive {
+      background: var(--status-cancelled-bg);
+      color: var(--status-cancelled-text);
+    }
 
     @media (max-width: 1200px) {
+
       .stats {
         grid-template-columns: repeat(2, 1fr) !important;
       }
+
       .grid {
         grid-template-columns: 1fr !important;
       }
+
     }
 
     @media (max-width: 992px) {
-      .top { padding: 0 24px; }
-      .content { padding: 24px 20px; }
+
+      .top {
+        padding: 0 24px;
+      }
+
+      .content {
+        padding: 24px 20px;
+      }
+
     }
 
     @media (max-width: 768px) {
-      .side { width: 72px; padding: 20px 8px; }
-      .brand-text, .nav span, .logout span { display: none; }
-      .brand { justify-content: center; padding: 0; }
-      .nav a, .logout a { justify-content: center; padding: 0; }
-      .top h1 { font-size: 18px; }
-      .profile-menu span { display: none; }
-      .profile-menu { padding: 4px; }
-      
+
+      .side {
+        width: 72px;
+        padding: 20px 8px;
+      }
+
+      .brand-text,
+      .nav span,
+      .logout span {
+        display: none;
+      }
+
+      .brand {
+        justify-content: center;
+        padding: 0;
+      }
+
+      .nav a,
+      .logout a {
+        justify-content: center;
+        padding: 0;
+      }
+
+      .top h1 {
+        font-size: 18px;
+      }
+
+      .profile-menu span {
+        display: none;
+      }
+
+      .profile-menu {
+        padding: 4px;
+      }
+
       .actions {
         grid-template-columns: 1fr !important;
       }
+
       .head {
         flex-direction: column;
         align-items: flex-start;
         gap: 12px;
       }
-      .head a, .head button, .head .btn-primary {
+
+      .head a,
+      .head button,
+      .head .btn-primary {
         width: 100%;
         text-align: center;
       }
-      th, td {
+
+      th,
+      td {
         padding: 10px 12px;
       }
+
     }
 
     @media (max-width: 480px) {
-      .top { padding: 0 12px; }
-      .content { padding: 16px 12px; }
+
+      .top {
+        padding: 0 12px;
+      }
+
+      .content {
+        padding: 16px 12px;
+      }
+
       .stats {
         grid-template-columns: 1fr !important;
       }
+
       .card {
         padding: 16px;
       }
+
       .card .num {
         font-size: 26px !important;
       }
+
+      .profile-dropdown {
+        right: -10px;
+        width: 220px;
+      }
+
     }
+
   </style>
+
 </head>
+
 <body>
 
   <div class="app-container">
+
     <aside class="side">
+
       <div class="brand">
-        <img src="../../images/logo.jpg" alt="Tarin-Morales Logo" class="brand-logo-img" onerror="this.src='https://via.placeholder.com/48?text=TM'">
+
+        <img
+          src="../../images/logo.jpg"
+          alt="Tarin-Morales Logo"
+          class="brand-logo-img"
+          onerror="this.src='https://via.placeholder.com/48?text=TM'"
+        >
+
         <div class="brand-text">
           <h2>TARIN-MORALES</h2>
           <small>Dental Clinic</small>
         </div>
+
       </div>
-      
+
       <nav class="nav">
-        <a class="<?php echo isset($current_page) && $current_page == 'dashboard.php' ? 'active' : ''; ?>" href="dashboard.php" title="Dashboard"><i class="fa-solid fa-chart-pie"></i><span>Dashboard</span></a>
-        <a class="<?php echo isset($current_page) && $current_page == 'patients.php' ? 'active' : ''; ?>" href="patients.php" title="Patients"><i class="fa-solid fa-user-group"></i><span>Patients</span></a>
-        <a class="<?php echo isset($current_page) && $current_page == 'appointments.php' ? 'active' : ''; ?>" href="appointments.php" title="Appointments"><i class="fa-regular fa-calendar-check"></i><span>Appointments</span></a>
-        <a class="<?php echo isset($current_page) && $current_page == 'dentists.php' ? 'active' : ''; ?>" href="dentists.php" title="Dentists"><i class="fa-solid fa-user-doctor"></i><span>Dentists</span></a>
-        <a class="<?php echo isset($current_page) && $current_page == 'history.php' ? 'active' : ''; ?>" href="history.php" title="Patient History"><i class="fa-solid fa-clock-rotate-left"></i><span>Patient History</span></a>
-        <a class="<?php echo isset($current_page) && $current_page == 'settings.php' ? 'active' : ''; ?>" href="settings.php" title="Settings"><i class="fa-solid fa-gear"></i><span>Settings</span></a>
+
+        <a
+          class="<?php echo $current_page === 'dashboard.php' ? 'active' : ''; ?>"
+          href="dashboard.php"
+          title="Dashboard"
+        >
+          <i class="fa-solid fa-chart-pie"></i>
+          <span>Dashboard</span>
+        </a>
+
+        <a
+          class="<?php echo $current_page === 'patients.php' ? 'active' : ''; ?>"
+          href="patients.php"
+          title="Patients"
+        >
+          <i class="fa-solid fa-user-group"></i>
+          <span>Patients</span>
+        </a>
+
+        <a
+          class="<?php echo $current_page === 'appointments.php' ? 'active' : ''; ?>"
+          href="appointments.php"
+          title="Appointments"
+        >
+          <i class="fa-regular fa-calendar-check"></i>
+          <span>Appointments</span>
+        </a>
+
+        <a
+          class="<?php echo $current_page === 'dentists.php' ? 'active' : ''; ?>"
+          href="dentists.php"
+          title="Dentists"
+        >
+          <i class="fa-solid fa-user-doctor"></i>
+          <span>Dentists</span>
+        </a>
+
+        <a
+          class="<?php echo $current_page === 'history.php' ? 'active' : ''; ?>"
+          href="history.php"
+          title="Patient History"
+        >
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <span>Patient History</span>
+        </a>
+
+        <a
+          class="<?php echo $current_page === 'settings.php' ? 'active' : ''; ?>"
+          href="settings.php"
+          title="Settings"
+        >
+          <i class="fa-solid fa-gear"></i>
+          <span>Settings</span>
+        </a>
+
       </nav>
 
       <div class="logout">
-        <a href="logout.php" title="Logout"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
+
+        <a href="logout.php" title="Logout">
+          <i class="fa-solid fa-right-from-bracket"></i>
+          <span>Logout</span>
+        </a>
+
       </div>
+
     </aside>
 
     <main class="main">
+
       <header class="top">
-        <h1><?php echo isset($header_title) ? htmlspecialchars($header_title, ENT_QUOTES, 'UTF-8') : 'Dashboard Overview'; ?></h1>
+
+        <h1>
+          <?php
+          echo isset($header_title)
+              ? htmlspecialchars($header_title, ENT_QUOTES, 'UTF-8')
+              : 'Dashboard Overview';
+          ?>
+        </h1>
+
         <div class="admin">
-          <button class="icon-btn" id="bellBtn" title="Notifications">
+
+          <button
+            class="icon-btn"
+            id="bellBtn"
+            type="button"
+            title="Notifications"
+          >
             <i class="fa-regular fa-bell fa-lg"></i>
             <span class="badge"></span>
           </button>
 
-          <div class="profile-menu" id="profileMenuBtn">
-            <div class="avatar"><i class="fa-solid fa-user"></i></div>
-            <span><?php echo htmlspecialchars($admin_display_name, ENT_QUOTES, 'UTF-8'); ?></span>
+          <div class="profile-wrapper">
+
+            <div class="profile-menu" id="profileMenuBtn">
+
+              <div class="avatar">
+                <i class="fa-solid fa-user"></i>
+              </div>
+
+              <span>
+                <?php echo htmlspecialchars(
+                    $admin_display_name,
+                    ENT_QUOTES,
+                    'UTF-8'
+                ); ?>
+              </span>
+
+              <i class="fa-solid fa-chevron-down profile-arrow"></i>
+
+            </div>
+
+            <div class="profile-dropdown" id="profileDropdown">
+
+              <a href="account-settings.php">
+                <i class="fa-solid fa-user-gear"></i>
+                <span>Account Settings</span>
+              </a>
+
+            </div>
+
           </div>
+
         </div>
+
       </header>
 
       <section class="content">
