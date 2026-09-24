@@ -8,30 +8,41 @@
     --blue: #079bd3;
     --blue-dark: #087eae;
     --blue-light: #eaf8fc;
-    --magenta: #bd19c5;
-    --text: #263238;
-    --gray: #71808a;
-    --border: #dfecef;
+    --purple: #bd19c5;
+    --text-dark: #263238;
+    --text-gray: #727d86;
+    --border: #e4e9ed;
+    --background: #f7fbfd;
     --white: #ffffff;
 }
 
 body {
-    font-family: "Manrope", sans-serif;
-    background: #f7fbfd;
-    color: var(--text);
+    font-family: 'Manrope', sans-serif;
+    background: var(--background);
+    color: var(--text-dark);
 }
 
-/* NAVBAR */
+button,
+input,
+a {
+    font-family: inherit;
+}
 
 .navbar {
+    width: 100%;
+    height: 80px;
     background: var(--white);
     border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
 }
 
 .navbar-container {
-    max-width: 1000px;
+    max-width: 1340px;
+    height: 100%;
     margin: auto;
-    height: 80px;
+    padding: 0 30px;
     display: flex;
     align-items: center;
 }
@@ -44,58 +55,10 @@ body {
 .logo img {
     width: 65px;
     height: 65px;
-    object-fit: cover;
     border-radius: 50%;
+    object-fit: cover;
+    display: block;
 }
-
-.menu-container {
-    position: relative;
-    margin-left: 20px;
-}
-
-.menu-button {
-    border: none;
-    background: none;
-    color: var(--text);
-    font-size: 21px;
-    cursor: pointer;
-    padding: 8px;
-}
-
-.top-menu {
-    display: none !important;
-    position: absolute;
-    top: 48px;
-    left: 0;
-    width: 190px;
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
-    overflow: hidden;
-    z-index: 20;
-}
-
-.top-menu.show {
-    display: block !important;
-}
-
-.top-menu a {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 14px 16px;
-    color: var(--text);
-    text-decoration: none;
-    font-size: 14px;
-}
-
-.top-menu a:hover {
-    background: var(--blue-light);
-    color: var(--blue-dark);
-}
-
-/* ACCOUNT */
 
 .account-container {
     position: relative;
@@ -105,15 +68,15 @@ body {
 .account {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 9px;
     cursor: pointer;
 }
 
 .account-icon {
-    width: 44px;
-    height: 44px;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--blue), var(--magenta));
+    background: linear-gradient(135deg, var(--blue), var(--purple));
     color: var(--white);
     display: flex;
     align-items: center;
@@ -127,34 +90,33 @@ body {
 }
 
 .account-info span {
-    font-size: 14px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 800;
 }
 
 .account-info small {
-    color: var(--gray);
-    font-size: 12px;
+    color: var(--text-gray);
+    font-size: 10px;
     margin-top: 3px;
 }
 
 .account-arrow {
-    color: #7b8790;
-    font-size: 11px;
-    margin-left: 2px;
+    color: #8b969d;
+    font-size: 9px;
 }
 
 .account-menu {
-    display: none;
     position: absolute;
+    top: 52px;
     right: 0;
-    top: 55px;
-    width: 190px;
+    width: 210px;
+    padding: 8px;
     background: var(--white);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
-    overflow: hidden;
-    z-index: 20;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.10);
+    display: none;
+    z-index: 1000;
 }
 
 .account-menu.show {
@@ -164,158 +126,168 @@ body {
 .account-menu a {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 14px 16px;
-    color: var(--text);
+    gap: 11px;
+    padding: 11px 12px;
+    color: var(--text-dark);
     text-decoration: none;
-    font-size: 14px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 700;
 }
 
 .account-menu a:hover {
     background: var(--blue-light);
-    color: var(--blue-dark);
+    color: var(--blue);
 }
 
-/* MAIN */
+.account-menu i {
+    width: 17px;
+    color: var(--blue);
+}
 
 .main-content {
-    padding: 35px 20px;
+    width: 100%;
 }
 
 .content {
-    max-width: 1000px;
+    max-width: 1340px;
     margin: auto;
-}
-
-/* PROFILE HEADER */
-
-.profile-header {
-    background: linear-gradient(120deg, #eaf8fc, #f9effa);
-    border: 1px solid #d7edf4;
-    border-radius: 18px;
     padding: 30px;
-    display: flex;
-    align-items: center;
-    gap: 22px;
-    margin-bottom: 25px;
 }
 
-.profile-icon {
-    width: 68px;
-    height: 68px;
-    border-radius: 50%;
-    background: var(--white);
+.page-header {
+    width: 100%;
+    margin-bottom: 22px;
+}
+
+.page-header span {
     color: var(--blue);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 27px;
-    flex-shrink: 0;
-}
-
-.profile-label {
-    color: var(--blue-dark);
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 800;
-    letter-spacing: 1.5px;
+    letter-spacing: 1.4px;
 }
 
-.profile-header h1 {
-    font-size: 32px;
-    margin: 5px 0;
-}
-
-.profile-header p {
-    color: var(--gray);
-    font-size: 15px;
-}
-
-/* PROFILE CARD */
-
-.profile-card {
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    padding: 30px;
-    box-shadow: 0 5px 18px rgba(20, 80, 100, 0.04);
-}
-
-.section-title {
-    margin-bottom: 15px;
-}
-
-.section-title h2 {
-    font-size: 22px;
-}
-
-.section-title p {
-    color: var(--gray);
-    font-size: 14px;
+.page-header h1 {
+    font-size: 24px;
+    font-weight: 800;
     margin-top: 5px;
 }
 
-/* INFORMATION */
+.page-header p {
+    color: var(--text-gray);
+    font-size: 12px;
+    margin-top: 4px;
+}
 
-.information {
+.card {
+    width: 100%;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.head {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+}
+
+.head h3 {
+    font-size: 16px;
+    font-weight: 800;
+}
+
+.settings-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0 35px;
 }
 
-.information > div {
-    padding: 18px 0;
-    border-bottom: 1px solid var(--border);
+.form-group {
+    padding: 15px 24px;
+    border-bottom: 1px solid #edf0f2;
+}
+
+.form-group:nth-child(odd) {
+    border-right: 1px solid #edf0f2;
+}
+
+.form-group label {
+    display: block;
+    color: var(--text-gray);
+    font-size: 11px;
+    margin-bottom: 6px;
+}
+
+.form-group input {
+    width: 100%;
+    height: 38px;
+    padding: 0 11px;
+    background: var(--white);
+    color: var(--text-dark);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    outline: none;
+    font-size: 12px;
+}
+
+.form-group input:focus {
+    border-color: var(--blue);
+}
+
+.form-group input[readonly] {
+    background: #f7f9fa;
+    color: var(--text-gray);
+    cursor: default;
+}
+
+.form-actions {
+    padding: 15px 24px;
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    justify-content: flex-end;
 }
 
-.information span {
-    color: #7a8992;
-    font-size: 13px;
-}
-
-.information strong {
-    color: var(--text);
-    font-size: 15px;
+.form-actions button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 14px;
+    background: var(--blue);
+    color: var(--white);
+    border: none;
+    border-radius: 6px;
+    font-size: 11px;
     font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s;
 }
 
-/* RESPONSIVE */
+.form-actions button:hover {
+    background: var(--blue-dark);
+}
 
-@media (max-width: 700px) {
+.settings-note {
+    padding: 12px 24px 16px;
+    color: var(--text-gray);
+    font-size: 11px;
+}
 
-    .navbar-container {
-        padding: 0 15px;
-    }
+.alert {
+    padding: 12px 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
 
-    .logo img {
-        width: 58px;
-        height: 58px;
-    }
+.alert.success {
+    background: #eaf8f1;
+    color: #247a52;
+    border: 1px solid #ccebdc;
+}
 
-    .menu-container {
-        margin-left: 12px;
-    }
-
-    .account-info {
-        display: none;
-    }
-
-    .profile-header {
-        padding: 25px;
-        gap: 15px;
-    }
-
-    .profile-header h1 {
-        font-size: 25px;
-    }
-
-    .profile-card {
-        padding: 25px;
-    }
-
-    .information {
-        grid-template-columns: 1fr;
-    }
+.alert.error {
+    background: #fdf0f0;
+    color: #a33a3a;
+    border: 1px solid #f0cccc;
 }
