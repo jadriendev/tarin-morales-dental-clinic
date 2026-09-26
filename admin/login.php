@@ -5,7 +5,6 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once 'db.php';
 
-// Logout
 if (isset($_GET['logout']) && $_GET['logout'] === '1') {
     $_SESSION = [];
     if (ini_get("session.use_cookies")) {
@@ -17,28 +16,50 @@ if (isset($_GET['logout']) && $_GET['logout'] === '1') {
     exit();
 }
 
-// CSRF token (generate once per session)
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-// Login form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $validCsrf    = hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '');
-    $inputAdminId = trim($_POST['username'] ?? '');
-    $password     = $_POST['password'] ?? '';
+$maxAttempts    = 5;
+$lockoutSeconds = 300;
 
-    if (!$validCsrf || $inputAdminId === '' || !ctype_digit($inputAdminId) || $password === '') {
+if (!isset($_SESSION['login_attempts'])) {
+    $_SESSION['login_attempts'] = 0;
+    $_SESSION['login_lockout_until'] = 0;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $now = time();
+
+    if ($_SESSION['login_lockout_until'] > $now) {
+        header("Location: login.php?error=too_many_attempts");
+        exit();
+    }
+
+    $validCsrf = hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '');
+    $username  = trim($_POST['username'] ?? '');
+    $password  = $_POST['password'] ?? '';
+
+    if (!$validCsrf || $username === '' || $password === '') {
         header("Location: login.php?error=invalid_credentials");
         exit();
     }
 
-    $stmt = $pdo->prepare("SELECT admin_id, user_id, first_name, last_name, password, status FROM tbl_admins WHERE admin_id = :admin_id LIMIT 1");
-    $stmt->execute(['admin_id' => $inputAdminId]);
+    $stmt = $pdo->prepare("SELECT admin_id, username, first_name, last_name, password, status FROM tbl_admins WHERE username = :username LIMIT 1");
+    $stmt->execute(['username' => $username]);
     $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$admin || !password_verify($password, $admin['password'])) {
+    if (!$admin || $admin['password'] === '' || !password_verify($password, $admin['password'])) {
+        $_SESSION['login_attempts']++;
+
+        if ($_SESSION['login_attempts'] >= $maxAttempts) {
+            $_SESSION['login_lockout_until'] = $now + $lockoutSeconds;
+            $_SESSION['login_attempts'] = 0;
+            header("Location: login.php?error=too_many_attempts");
+            exit();
+        }
+
         header("Location: login.php?error=invalid_credentials");
         exit();
     }
@@ -48,23 +69,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
+    $_SESSION['login_attempts'] = 0;
+    $_SESSION['login_lockout_until'] = 0;
+
     session_regenerate_id(true);
     unset($_SESSION['csrf_token']);
 
     $_SESSION['admin_id']  = $admin['admin_id'];
-    $_SESSION['user_id']   = $admin['user_id'];
+    $_SESSION['user_id']   = $admin['admin_id'];
     $_SESSION['full_name'] = $admin['first_name'] . ' ' . $admin['last_name'];
     $_SESSION['role']      = 'admin';
 
-    header("Location: admindashboard.php");
+    header("Location: dashboard/dashboard.php");
     exit();
 }
 
-// Error message for the view
 $errors = [
     'account_inactive'    => 'Your account is inactive. Please contact the system administrator.',
-    'invalid_credentials' => 'Invalid Admin ID or password.',
+    'invalid_credentials' => 'Invalid username or password.',
     'unauthorized'        => 'Please sign in to access the admin portal.',
+    'too_many_attempts'   => 'Too many failed login attempts. Please try again in a few minutes.',
 ];
 $error = isset($_GET['error']) ? ($errors[$_GET['error']] ?? 'An error occurred. Please try again.') : '';
 
@@ -89,7 +113,7 @@ $isLoggedInAdmin = isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 
 </style>
 
 </head>
-<body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#5FC0F0] via-white to-[#C24FE0] px-4">
+<body class="min-h-screen flex items-center justify-center bg-white px-4">
 
 <div class="w-full max-w-md bg-white/90 backdrop-blur rounded-2xl shadow-xl border border-[#5FC0F0]/40 p-8">
 
@@ -116,14 +140,14 @@ $isLoggedInAdmin = isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 
             <p class="text-gray-500 mb-4 break-all"><?php echo htmlspecialchars($_SESSION["full_name"] ?? 'Admin'); ?></p>
 
             <div class="space-y-2">
-                <a href="admindashboard.php"
+                <a href="dashboard.php"
                    class="inline-block w-full py-2.5 rounded-lg text-white font-medium hover:opacity-90 transition text-center"
                    style="background: linear-gradient(to right, #2E9FE0, #9A2FC9);">
-                   Go to Dashboard
+                    Go to Dashboard
                 </a>
                 <a href="login.php?logout=1"
                    class="inline-block w-full py-2.5 rounded-lg bg-gray-200 text-gray-700 font-medium hover:bg-gray-300 transition text-center">
-                   Log Out
+                    Log Out
                 </a>
             </div>
         </div>
@@ -149,12 +173,12 @@ $isLoggedInAdmin = isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
 
             <div>
-                <label class="block text-sm font-medium text-gray-600 mb-1">Admin ID</label>
+                <label class="block text-sm font-medium text-gray-600 mb-1">Username</label>
                 <div class="relative flex items-center">
                     <i class="fa-solid fa-user absolute left-3.5 text-gray-400 text-lg pointer-events-none"></i>
                     <input type="text" name="username" required
                         class="w-full rounded-lg border border-gray-300 pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#2E9FE0] focus:border-transparent transition"
-                        placeholder="Enter Admin ID">
+                        placeholder="Enter Username">
                 </div>
             </div>
 

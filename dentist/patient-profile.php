@@ -2,28 +2,63 @@
 require_once 'config.php';
 session_start();
 
-$patient_id = $_GET['id'] ?? 1;
+// ---------------------------------------------------------------
+// 1. Kunin ang patient ID mula sa URL (default: 1)
+// ---------------------------------------------------------------
+$patient_id = isset($_GET['id']) ? (int) $_GET['id'] : 1;
 
-$id_column = 'id';
-$col_res = mysqli_query($link, "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='tbl_patients' AND COLUMN_NAME LIKE '%id%'");
-if ($col_res && $col = mysqli_fetch_assoc($col_res)) {
-    $id_column = $col['COLUMN_NAME'];
+// ---------------------------------------------------------------
+// 2. Kunin ang patient galing sa database
+//    - tbl_patients ang may name, birth_date, sex, contact_number, address
+//    - tbl_users ang may email (naka-link via user_id)
+// ---------------------------------------------------------------
+$patient = null;
+
+$sql = "SELECT p.patient_id, p.first_name, p.middle_name, p.last_name,
+               p.birth_date, p.sex, p.contact_number, p.address,
+               u.email
+        FROM tbl_patients p
+        LEFT JOIN tbl_users u ON u.user_id = p.user_id
+        WHERE p.patient_id = ?
+        LIMIT 1";
+
+$stmt = mysqli_prepare($link, $sql);
+if ($stmt) {
+    mysqli_stmt_bind_param($stmt, 'i', $patient_id);
+    mysqli_stmt_execute($stmt);
+    $result  = mysqli_stmt_get_result($stmt);
+    $patient = mysqli_fetch_assoc($result) ?: null;
+    mysqli_stmt_close($stmt);
 }
 
-$sql = "SELECT * FROM tbl_patients WHERE $id_column = " . intval($patient_id);
-$result = mysqli_query($link, $sql);
-$patient = mysqli_fetch_assoc($result);
+// ---------------------------------------------------------------
+// 3. I-format ang mga values na kailangan ng page
+// ---------------------------------------------------------------
+$fullname = $birthday = $age = $gender = $contact = $email = $address = $allergies = '';
 
-if (!$patient) {
-    $patient = [
-        'fullname' => 'Juan Dela Cruz',
-        'age' => 28,
-        'birthday' => '15 March 1998',
-        'gender' => 'Male',
-        'contact_number' => '0917 123 4567',
-        'email' => 'juan.delacruz@email.com',
-        'allergies' => 'Penicillin'
-    ];
+if ($patient) {
+    // Buong pangalan (skip ang middle name kung wala)
+    $fullname = trim(implode(' ', array_filter([
+        $patient['first_name']  ?? '',
+        $patient['middle_name'] ?? '',
+        $patient['last_name']   ?? ''
+    ])));
+
+    // Birthday at age (kinukuwenta mula sa birth_date)
+    if (!empty($patient['birth_date'])) {
+        $birth    = new DateTime($patient['birth_date']);
+        $birthday = $birth->format('d F Y');
+        $age      = $birth->diff(new DateTime('today'))->y;
+    }
+
+    $gender  = $patient['sex']            ?? '';
+    $contact = $patient['contact_number'] ?? '';
+    $email   = $patient['email']          ?? '';
+    $address = $patient['address']        ?? '';
+
+    // Wala pang 'allergies' column sa tbl_patients.
+    // Kapag nagdagdag ka na ng column, automatic na itong lalabas.
+    $allergies = $patient['allergies'] ?? '';
 }
 ?>
 <!DOCTYPE html>
@@ -90,7 +125,7 @@ if (!$patient) {
                     <i class="fa-solid fa-user-group w-5 text-blue-600"></i>
                     <span>Patients</span>
                 </a>
-                <a href="add-prescription.php?patient_id=1" class="nav-option flex items-center gap-3.5 px-4 py-3 rounded-xl text-slate-600 font-medium transition">
+                <a href="add-prescription.php?patient_id=<?= (int) $patient_id ?>" class="nav-option flex items-center gap-3.5 px-4 py-3 rounded-xl text-slate-600 font-medium transition">
                     <i class="fa-solid fa-prescription w-5 text-blue-600"></i>
                     <span>Prescription</span>
                 </a>
@@ -134,24 +169,38 @@ if (!$patient) {
                 <p class="text-slate-500 text-sm mt-1">View and manage patient information.</p>
             </div>
 
+            <?php if (!$patient): ?>
+
+                <!-- Walang nahanap na patient -->
+                <div class="bg-white p-8 rounded-2xl border border-red-200 shadow-md text-center">
+                    <div class="w-16 h-16 mx-auto rounded-full bg-red-50 text-red-400 flex items-center justify-center text-2xl mb-4">
+                        <i class="fa-solid fa-user-slash"></i>
+                    </div>
+                    <h4 class="font-bold text-lg text-slate-800">Patient not found</h4>
+                    <p class="text-slate-500 text-sm mt-1">Walang patient na may ID <?= (int) $patient_id ?> sa database.</p>
+                </div>
+
+            <?php else: ?>
+
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div class="relative bg-white p-6 rounded-2xl border border-blue-200/60 shadow-md hover:shadow-lg transition overflow-hidden group">
                     <div class="flex flex-col items-center justify-center relative z-10">
                         <div class="w-20 h-20 rounded-full bg-white text-blue-400 flex items-center justify-center text-3xl mb-4 shadow-md border border-blue-300">
                             <i class="fa-solid fa-user"></i>
                         </div>
-                        <h3 class="font-bold text-lg text-slate-800 text-center"><?= htmlspecialchars($patient['fullname']) ?></h3>
-                        <span class="text-xs text-slate-400 font-medium mt-1">Patient ID: <?= $patient_id ?></span>
+                        <h3 class="font-bold text-lg text-slate-800 text-center"><?= htmlspecialchars($fullname) ?></h3>
+                        <span class="text-xs text-slate-400 font-medium mt-1">Patient ID: <?= (int) $patient['patient_id'] ?></span>
                     </div>
                 </div>
 
                 <div class="md:col-span-2 relative bg-white p-6 rounded-2xl border border-blue-200/60 shadow-md hover:shadow-lg transition overflow-hidden group">
                     <h4 class="text-sm font-bold uppercase tracking-wider text-blue-600 mb-4 relative z-10">Basic Information</h4>
                     <div class="grid grid-cols-2 gap-4 text-sm relative z-10">
-                        <div><span class="text-slate-400 block text-xs font-medium">Full Name</span><span class="font-semibold text-slate-800 mt-1"><?= htmlspecialchars($patient['fullname']) ?></span></div>
-                        <div><span class="text-slate-400 block text-xs font-medium">Age</span><span class="font-semibold text-slate-800 mt-1"><?= htmlspecialchars($patient['age'] ?? '28') ?></span></div>
-                        <div><span class="text-slate-400 block text-xs font-medium">Birthday</span><span class="font-semibold text-slate-800 mt-1"><?= htmlspecialchars($patient['birthday'] ?? '15 March 1998') ?></span></div>
-                        <div><span class="text-slate-400 block text-xs font-medium">Gender</span><span class="font-semibold text-slate-800 mt-1"><?= htmlspecialchars($patient['gender'] ?? 'Male') ?></span></div>
+                        <div><span class="text-slate-400 block text-xs font-medium">Full Name</span><span class="font-semibold text-slate-800 mt-1"><?= htmlspecialchars($fullname) ?></span></div>
+                        <div><span class="text-slate-400 block text-xs font-medium">Age</span><span class="font-semibold text-slate-800 mt-1"><?= htmlspecialchars((string) $age) ?></span></div>
+                        <div><span class="text-slate-400 block text-xs font-medium">Birthday</span><span class="font-semibold text-slate-800 mt-1"><?= htmlspecialchars($birthday) ?></span></div>
+                        <div><span class="text-slate-400 block text-xs font-medium">Gender</span><span class="font-semibold text-slate-800 mt-1"><?= htmlspecialchars($gender) ?></span></div>
+                        <div class="col-span-2"><span class="text-slate-400 block text-xs font-medium">Address</span><span class="font-semibold text-slate-800 mt-1"><?= htmlspecialchars($address) ?></span></div>
                     </div>
                 </div>
             </div>
@@ -165,8 +214,8 @@ if (!$patient) {
                         </div>
                     </div>
                     <div class="space-y-3 relative z-10">
-                        <div><span class="text-slate-400 block text-xs font-medium">Phone Number</span><span class="font-semibold text-slate-800 mt-1"><?= htmlspecialchars($patient['contact_number'] ?? '0917 123 4567') ?></span></div>
-                        <div><span class="text-slate-400 block text-xs font-medium">Email</span><span class="font-semibold text-slate-800 mt-1 break-all"><?= htmlspecialchars($patient['email'] ?? 'juan.delacruz@email.com') ?></span></div>
+                        <div><span class="text-slate-400 block text-xs font-medium">Phone Number</span><span class="font-semibold text-slate-800 mt-1"><?= htmlspecialchars($contact) ?></span></div>
+                        <div><span class="text-slate-400 block text-xs font-medium">Email</span><span class="font-semibold text-slate-800 mt-1 break-all"><?= htmlspecialchars($email) ?></span></div>
                     </div>
                 </div>
 
@@ -179,7 +228,11 @@ if (!$patient) {
                     </div>
                     <div class="relative z-10">
                         <span class="text-slate-400 block text-xs font-medium">Allergies</span>
-                        <span class="font-semibold text-blue-600 mt-1 text-lg"><?= htmlspecialchars($patient['allergies'] ?? 'Penicillin') ?></span>
+                        <?php if ($allergies !== ''): ?>
+                            <span class="font-semibold text-blue-600 mt-1 text-lg"><?= htmlspecialchars($allergies) ?></span>
+                        <?php else: ?>
+                            <span class="font-semibold text-slate-400 mt-1 text-lg">None recorded</span>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -188,10 +241,12 @@ if (!$patient) {
                 <a href="dentist-dashboard.php" class="flex items-center gap-2 px-6 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition">
                     <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
                 </a>
-                <a href="add-prescription.php?patient_id=<?= $patient_id ?>" class="flex items-center gap-2 px-6 py-3 btn-gradient text-white font-medium rounded-xl shadow-md hover:shadow-lg transition">
+                <a href="add-prescription.php?patient_id=<?= (int) $patient['patient_id'] ?>" class="flex items-center gap-2 px-6 py-3 btn-gradient text-white font-medium rounded-xl shadow-md hover:shadow-lg transition">
                     <i class="fa-solid fa-prescription"></i> Add Prescription
                 </a>
             </div>
+
+            <?php endif; ?>
 
         </div>
     </main>
