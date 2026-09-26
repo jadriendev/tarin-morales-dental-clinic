@@ -19,17 +19,6 @@ $appointment_date = $_POST['appointment_date'] ?? '';
 $appointment_time = $_POST['appointment_time'] ?? '';
 $procedure_name   = $_POST['procedure_name'] ?? '';
 $reason           = $_POST['reason'] ?? '';
-$status           = $_POST['status'] ?? 'pending';
-
-$allowed_statuses = [
-    'pending',
-    'confirmed',
-    'for_dentist',
-    'in_progress',
-    'completed',
-    'cancelled',
-    'no_show'
-];
 
 try {
 
@@ -80,7 +69,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $appointment_time = trim($appointment_time);
     $procedure_name   = trim($procedure_name);
     $reason           = trim($reason);
-    $status           = trim($status);
 
     if (!$admin_id) {
 
@@ -95,10 +83,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ) {
 
         $error_message = "Please fill in all required fields (Patient, Dentist, Date, Time, and Procedure).";
-
-    } elseif (!in_array($status, $allowed_statuses, true)) {
-
-        $error_message = "Invalid appointment status selected.";
 
     } else {
 
@@ -194,7 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     :appointment_time,
                     :procedure_name,
                     :reason,
-                    :status
+                    'for_dentist'
                 )
             ");
 
@@ -205,8 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':appointment_date' => $appointment_date,
                 ':appointment_time' => $appointment_time,
                 ':procedure_name'   => $procedure_name,
-                ':reason'           => $reason !== '' ? $reason : null,
-                ':status'           => $status
+                ':reason'           => $reason !== '' ? $reason : null
             ]);
 
             header("Location: appointments.php?msg=success");
@@ -217,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             error_log("Database Error (Insert Appointment): " . $e->getMessage());
 
             $error_message =
-                "An error occurred while saving the appointment. Please try again.";
+                "An error occurred while sending the appointment. Please try again.";
 
         } catch (Exception $e) {
 
@@ -353,7 +336,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <div class="welcome" style="margin-bottom: 24px;">
   <h2>New Appointment</h2>
-  <p>Schedule a dental procedure or consultation for a patient.</p>
+  <p>Send a patient to a dentist by scheduling an appointment.</p>
 </div>
 
 <div class="form-container">
@@ -450,21 +433,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         >
       </div>
 
-      <div class="form-group">
-        <label for="status">Status</label>
-
-        <select id="status" name="status">
-          <?php foreach ($allowed_statuses as $st): ?>
-            <option
-              value="<?php echo htmlspecialchars($st, ENT_QUOTES, 'UTF-8'); ?>"
-              <?php echo ($status === $st) ? 'selected' : ''; ?>
-            >
-              <?php echo ucwords(str_replace('_', ' ', $st)); ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
-      </div>
-
       <div class="form-group full-width">
         <label for="reason">Reason / Notes</label>
 
@@ -485,8 +453,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </a>
 
       <button type="submit" class="btn btn-primary">
-        <i class="fa-solid fa-calendar-plus"></i>
-        Save Appointment
+        <i class="fa-solid fa-paper-plane"></i>
+        Send to Dentist
       </button>
 
     </div>

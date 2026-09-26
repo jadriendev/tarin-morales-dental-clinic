@@ -537,7 +537,7 @@ if ($total_overview > 0) {
     <span>New Appointment</span>
   </a>
 
-  <a class="action" href="patient-history.php">
+  <a class="action" href="history.php">
     <i class="fa-solid fa-file-medical"></i>
     <span>Patient History</span>
   </a>
