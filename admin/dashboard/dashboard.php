@@ -1,6 +1,8 @@
 <?php
 ob_start();
 
+require_once __DIR__ . '/../config.php';
+
 $page_title = "Dashboard";
 $header_title = "Dashboard Overview";
 
