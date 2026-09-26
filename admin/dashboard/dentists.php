@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../config.php';
+
 $page_title = "Dentists";
 $header_title = "Dentist Directory";
 

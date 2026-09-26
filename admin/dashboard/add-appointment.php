@@ -1,7 +1,7 @@
 <?php
-require_once __DIR__ . '/../config.php';
-
 ob_start();
+
+require_once __DIR__ . '/../config.php';
 
 $page_title = "New Appointment";
 $header_title = "Schedule Appointment";
