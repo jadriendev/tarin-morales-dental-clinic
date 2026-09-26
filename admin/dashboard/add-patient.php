@@ -542,7 +542,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <div class="form-actions">
 
-      <a href="patient.php" class="btn btn-secondary">
+      <a href="patients.php" class="btn btn-secondary">
         Cancel
       </a>
 

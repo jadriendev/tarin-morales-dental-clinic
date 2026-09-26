@@ -27,16 +27,6 @@ $appointment = null;
 $patients = [];
 $dentists = [];
 
-$valid_statuses = [
-    'pending',
-    'confirmed',
-    'for_dentist',
-    'in_progress',
-    'completed',
-    'cancelled',
-    'no_show'
-];
-
 try {
     $stmt = $pdo->prepare("
         SELECT
@@ -71,6 +61,7 @@ try {
         SELECT
             p.patient_id,
             p.first_name,
+            p.middle_name,
             p.last_name
         FROM tbl_patients p
         INNER JOIN tbl_users u
@@ -132,10 +123,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $appointment) {
             $_POST['appointment_time'] ?? ''
         );
 
-        $status = trim(
-            $_POST['status'] ?? 'pending'
-        );
-
         $reason = trim(
             $_POST['reason'] ?? ''
         );
@@ -149,10 +136,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $appointment) {
         ) {
 
             $error_message = "Please fill in all required fields.";
-
-        } elseif (!in_array($status, $valid_statuses, true)) {
-
-            $error_message = "Invalid appointment status.";
 
         } elseif (strlen($procedure_name) > 150) {
 
@@ -212,7 +195,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $appointment) {
                             INNER JOIN tbl_users u
                                 ON p.user_id = u.user_id
                             WHERE p.patient_id = :patient_id
-                            AND u.status = 'active'
+                              AND u.status = 'active'
                             LIMIT 1
                         ");
 
@@ -230,7 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $appointment) {
                                 SELECT dentist_id
                                 FROM tbl_dentists
                                 WHERE dentist_id = :dentist_id
-                                AND status = 'active'
+                                  AND status = 'active'
                                 LIMIT 1
                             ");
 
@@ -248,10 +231,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $appointment) {
                                     SELECT appointment_id
                                     FROM tbl_appointments
                                     WHERE dentist_id = :dentist_id
-                                    AND appointment_date = :appointment_date
-                                    AND appointment_time = :appointment_time
-                                    AND appointment_id != :appointment_id
-                                    AND status NOT IN ('cancelled', 'no_show')
+                                      AND appointment_date = :appointment_date
+                                      AND appointment_time = :appointment_time
+                                      AND appointment_id != :appointment_id
+                                      AND status NOT IN ('cancelled', 'no_show')
                                     LIMIT 1
                                 ");
 
@@ -276,8 +259,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $appointment) {
                                             appointment_date = :appointment_date,
                                             appointment_time = :appointment_time,
                                             procedure_name = :procedure_name,
-                                            reason = :reason,
-                                            status = :status
+                                            reason = :reason
                                         WHERE appointment_id = :appointment_id
                                     ");
 
@@ -288,7 +270,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $appointment) {
                                         ':appointment_time' => $appointment_time,
                                         ':procedure_name' => $procedure_name,
                                         ':reason' => $reason !== '' ? $reason : null,
-                                        ':status' => $status,
                                         ':appointment_id' => $appointment_id
                                     ]);
 
@@ -300,7 +281,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $appointment) {
                                     $appointment['appointment_time'] = $appointment_time;
                                     $appointment['procedure_name'] = $procedure_name;
                                     $appointment['reason'] = $reason;
-                                    $appointment['status'] = $status;
                                 }
                             }
                         }
@@ -377,6 +357,18 @@ include __DIR__ . '/includes/header.php';
   .form-group select:focus,
   .form-group textarea:focus {
     border-color: var(--brand-purple, #9333ea);
+  }
+
+  .status-display {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--border-color, #d1d5db);
+    background: var(--gradient-subtle, #f3f4f6);
+    color: var(--text-main, #111827);
+    font-size: 14px;
+    font-weight: 600;
+    box-sizing: border-box;
   }
 
   .alert {
@@ -500,7 +492,11 @@ include __DIR__ . '/includes/header.php';
               >
                 <?php
                 echo htmlspecialchars(
-                    trim($p['first_name'] . ' ' . $p['last_name']),
+                    trim(
+                        $p['first_name'] . ' ' .
+                        ($p['middle_name'] ?? '') . ' ' .
+                        $p['last_name']
+                    ),
                     ENT_QUOTES,
                     'UTF-8'
                 );
@@ -515,7 +511,7 @@ include __DIR__ . '/includes/header.php';
 
         <div class="form-group">
 
-          <label for="dentist_id">Dentist *</label>
+          <label for="dentist_id">Assigned Dentist *</label>
 
           <select id="dentist_id" name="dentist_id" required>
 
@@ -529,7 +525,7 @@ include __DIR__ . '/includes/header.php';
               >
                 <?php
                 echo htmlspecialchars(
-                    trim($d['first_name'] . ' ' . $d['last_name']),
+                    'Dr. ' . trim($d['first_name'] . ' ' . $d['last_name']),
                     ENT_QUOTES,
                     'UTF-8'
                 );
@@ -560,39 +556,29 @@ include __DIR__ . '/includes/header.php';
 
         <div class="form-group">
 
-          <label for="status">Status</label>
+          <label>Appointment Status</label>
 
-          <select id="status" name="status">
+          <div class="status-display">
+            <?php
+            $current_status = $appointment['status'] ?? 'pending';
 
-            <option value="pending" <?php echo (($appointment['status'] ?? '') === 'pending') ? 'selected' : ''; ?>>
-              Pending
-            </option>
+            $status_labels = [
+                'pending' => 'Pending',
+                'confirmed' => 'Confirmed',
+                'for_dentist' => 'For Dentist',
+                'in_progress' => 'In Progress',
+                'completed' => 'Completed',
+                'cancelled' => 'Cancelled',
+                'no_show' => 'No Show'
+            ];
 
-            <option value="confirmed" <?php echo (($appointment['status'] ?? '') === 'confirmed') ? 'selected' : ''; ?>>
-              Confirmed
-            </option>
-
-            <option value="for_dentist" <?php echo (($appointment['status'] ?? '') === 'for_dentist') ? 'selected' : ''; ?>>
-              For Dentist
-            </option>
-
-            <option value="in_progress" <?php echo (($appointment['status'] ?? '') === 'in_progress') ? 'selected' : ''; ?>>
-              In Progress
-            </option>
-
-            <option value="completed" <?php echo (($appointment['status'] ?? '') === 'completed') ? 'selected' : ''; ?>>
-              Completed
-            </option>
-
-            <option value="cancelled" <?php echo (($appointment['status'] ?? '') === 'cancelled') ? 'selected' : ''; ?>>
-              Cancelled
-            </option>
-
-            <option value="no_show" <?php echo (($appointment['status'] ?? '') === 'no_show') ? 'selected' : ''; ?>>
-              No Show
-            </option>
-
-          </select>
+            echo htmlspecialchars(
+                $status_labels[$current_status] ?? ucfirst(str_replace('_', ' ', $current_status)),
+                ENT_QUOTES,
+                'UTF-8'
+            );
+            ?>
+          </div>
 
         </div>
 

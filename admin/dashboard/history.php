@@ -1,11 +1,10 @@
 <?php
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../db.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-
-require_once __DIR__ . '/../db.php';
 
 $page_title = "Patient History";
 $header_title = "Medical & Dental History";
@@ -13,16 +12,21 @@ $header_title = "Medical & Dental History";
 $stmtHistory = $pdo->query("
     SELECT 
         r.record_id,
-        CONCAT(p.first_name, ' ', p.last_name) AS patient,
+        CONCAT(
+            p.first_name,
+            ' ',
+            COALESCE(CONCAT(p.middle_name, ' '), ''),
+            p.last_name
+        ) AS patient,
         r.diagnosis,
         r.treatment_summary,
         r.remarks,
         r.record_date,
-        CONCAT('Dr. ', d.last_name) AS dentist
+        CONCAT('Dr. ', d.first_name, ' ', d.last_name) AS dentist
     FROM tbl_dental_records r
-    LEFT JOIN tbl_patients p 
+    LEFT JOIN tbl_patients p
         ON r.patient_id = p.patient_id
-    LEFT JOIN tbl_dentists d 
+    LEFT JOIN tbl_dentists d
         ON r.dentist_id = d.dentist_id
     ORDER BY r.record_date DESC
 ");

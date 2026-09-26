@@ -71,13 +71,27 @@ try {
 
     $stmtApp = $pdo->query("
         SELECT 
-            CONCAT(p.first_name, ' ', p.last_name) AS patient,
-            TIME_FORMAT(a.appointment_time, '%h:%i %p') AS time,
+            CONCAT(
+                p.first_name,
+                ' ',
+                COALESCE(CONCAT(p.middle_name, ' '), ''),
+                p.last_name
+            ) AS patient,
+
+            TIME_FORMAT(
+                a.appointment_time,
+                '%h:%i %p'
+            ) AS time,
 
             CASE 
-                WHEN d.last_name IS NOT NULL 
+                WHEN d.last_name IS NOT NULL
                      AND d.last_name != ''
-                THEN CONCAT('Dr. ', d.first_name, ' ', d.last_name)
+                THEN CONCAT(
+                    'Dr. ',
+                    d.first_name,
+                    ' ',
+                    d.last_name
+                )
                 ELSE 'Unassigned'
             END AS dentist,
 
@@ -661,6 +675,23 @@ if ($total_overview > 0) {
 
             <?php foreach ($appointments as $app): ?>
 
+              <?php
+              $status = strtolower($app['status'] ?? 'pending');
+
+              $status_labels = [
+                  'pending' => 'Pending',
+                  'confirmed' => 'Confirmed',
+                  'for_dentist' => 'For Dentist',
+                  'in_progress' => 'In Progress',
+                  'completed' => 'Completed',
+                  'cancelled' => 'Cancelled',
+                  'no_show' => 'No Show'
+              ];
+
+              $status_label = $status_labels[$status]
+                  ?? ucfirst(str_replace('_', ' ', $status));
+              ?>
+
               <tr>
 
                 <td class="patient-cell">
@@ -705,19 +736,18 @@ if ($total_overview > 0) {
 
                 <td>
 
-                  <?php
-                  $status = $app['status'] ?? 'pending';
-                  $status_class = strtolower($status);
-                  ?>
+                  <span class="status <?php echo htmlspecialchars(
+                      $status,
+                      ENT_QUOTES,
+                      'UTF-8'
+                  ); ?>">
 
-                  <span class="status <?php echo htmlspecialchars($status_class, ENT_QUOTES, 'UTF-8'); ?>">
-                    <?php
-                    echo htmlspecialchars(
-                        ucfirst(str_replace('_', ' ', $status)),
+                    <?php echo htmlspecialchars(
+                        $status_label,
                         ENT_QUOTES,
                         'UTF-8'
-                    );
-                    ?>
+                    ); ?>
+
                   </span>
 
                 </td>
