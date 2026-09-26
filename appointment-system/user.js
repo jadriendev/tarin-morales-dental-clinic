@@ -83,3 +83,14 @@ document.addEventListener("click", function(event) {
         accountMenu.classList.remove("show");
     }
 });
+
+function confirmLogout(event) {
+    const logout = confirm("Do you want to log out of this account?");
+
+    if (!logout) {
+        event.preventDefault();
+        return false;
+    }
+
+    return true;
+}

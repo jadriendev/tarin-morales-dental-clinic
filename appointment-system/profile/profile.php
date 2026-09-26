@@ -6,176 +6,197 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once '../db.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'patient') {
-    header("Location: login.php?error=unauthorized");
+    header("Location: ../login.php?error=unauthorized");
     exit();
 }
 
 $userId = $_SESSION['user_id'];
 
 $stmt = $pdo->prepare("
-    SELECT patient_id, first_name, middle_name, last_name, birth_date, sex, contact_number, address, date_registered
-    FROM tbl_patients
-    WHERE user_id = :user_id
+    SELECT p.patient_id, p.first_name, p.middle_name, p.last_name, p.birth_date,
+           p.sex, p.contact_number, p.address, p.date_registered,
+           u.username, u.email
+    FROM tbl_patients p
+    JOIN tbl_users u ON p.user_id = u.user_id
+    WHERE p.user_id = :user_id
     LIMIT 1
 ");
 
-$stmt->execute([
-    'user_id' => $userId
-]);
-
+$stmt->execute(['user_id' => $userId]);
 $patient = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$patient) {
-    header("Location: login.php?error=unauthorized");
+    header("Location: ../login.php?error=unauthorized");
     exit();
 }
 
-$fullName = trim(
-    $patient['first_name'] . ' ' .
-    ($patient['middle_name'] ? $patient['middle_name'] . ' ' : '') .
-    $patient['last_name']
-);
-
 $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
+
+$message = '';
+$messageType = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $contactNumber = trim($_POST['contact_number'] ?? '');
+    $address = trim($_POST['address'] ?? '');
+
+    if ($contactNumber === '' || $address === '') {
+        $message = 'Contact number and address are required.';
+        $messageType = 'error';
+    } else {
+        try {
+            $update = $pdo->prepare("
+                UPDATE tbl_patients
+                SET contact_number = :contact_number, address = :address
+                WHERE user_id = :user_id
+            ");
+
+            $update->execute([
+                'contact_number' => $contactNumber,
+                'address' => $address,
+                'user_id' => $userId
+            ]);
+
+            $patient['contact_number'] = $contactNumber;
+            $patient['address'] = $address;
+
+            $message = 'Contact information updated successfully.';
+            $messageType = 'success';
+        } catch (PDOException $e) {
+            $message = 'Unable to update contact information.';
+            $messageType = 'error';
+        }
+    }
+}
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>Profile | Tarin-Morales Dental Clinic</title>
-
-    <link rel="stylesheet" href="profile.css">
-
+    <title>Account Settings | Tarin-Morales Dental Clinic</title>
+    <link rel="stylesheet" href="./profile.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
-
-    <link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css"
-      crossorigin="anonymous"
-      referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 </head>
-
 <body>
-
 <header class="navbar">
     <div class="navbar-container">
         <a href="../user-dashboard.php" class="logo">
-            <img src="../../images/logo.jpg" alt="Tarin-Morales Dental Clinic">
-        </a>
-        <div class="menu-container">
-            <button type="button" class="menu-button" onclick="toggleMenu()">
-                <i class="fa-solid fa-bars"></i>
-            </button>
-            <div class="top-menu" id="topMenu">
-                <a href="../user-dashboard.php">
-                    <i class="fa-solid fa-house"></i>
-                    <span>Dashboard</span>
-                </a>
-                <a href="../appointments.php">
-                    <i class="fa-regular fa-calendar-days"></i>
-                    <span>Appointments</span>
-                </a>
-                <a href="profile.php">
-                    <i class="fa-regular fa-user"></i>
-                    <span>Profile</span>
-                </a>
-            </div>
-        </div>
+            <img src="../../images/logo.jpg" alt="Tarin-Morales Dental Clinic"> </a>
         <div class="account-container">
             <div class="account" onclick="toggleAccountMenu()">
                 <div class="account-icon">
                     <i class="fa-solid fa-user"></i>
                 </div>
                 <div class="account-info">
-                    <span><?php echo htmlspecialchars($_SESSION['username']); ?></span>
+                    <span><?php echo htmlspecialchars($patient['username']); ?></span>
                     <small>Patient</small>
                 </div>
                 <i class="fa-solid fa-chevron-down account-arrow"></i>
             </div>
             <div class="account-menu" id="accountMenu">
-                <a href="account-settings.php">
-                    <i class="fa-solid fa-gear"></i>
-                    <span>Account Settings</span>
-                </a>
+                <a href="../user-dashboard.php">
+                    <i class="fa-solid fa-house"></i>
+                    <span>Dashboard</span> </a>
+                <a href="../login.php?logout=1">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>Logout</span> </a>
             </div>
         </div>
     </div>
 </header>
 
-
 <main class="main-content">
     <div class="content">
-        <section class="profile-header">
-            <div class="profile-icon">
-                <i class="fa-solid fa-user"></i>
+        <div class="page-header">
+            <span>ACCOUNT SETTINGS</span>
+            <h1>Account Settings</h1>
+            <p>Manage your account and patient information.</p>
+        </div>
+        <?php if ($message !== ''): ?>
+            <div class="alert <?php echo $messageType; ?>">
+                <?php echo htmlspecialchars($message); ?>
             </div>
-            <div>
-                <span class="profile-label">PATIENT PROFILE</span>
-                <h1><?php echo htmlspecialchars($fullName); ?></h1>
-                <p>
-                    View your personal and patient information.
-                </p>
+        <?php endif; ?>
+        <div class="card mb-4">
+            <div class="head">
+                <h3>Account Information</h3>
             </div>
-        </section>
-
-        <section class="profile-card">
-            <div class="section-title">
-                <h2>Personal Information</h2>
-                <p>Your registered patient information.</p>
+            <div class="settings-grid">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" value="<?php echo htmlspecialchars($patient['username']); ?>" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" value="<?php echo htmlspecialchars($patient['email']); ?>" readonly>
+                </div>
             </div>
-            <div class="information">
-                <div>
-                    <span>Patient ID</span>
-                    <strong><?php echo htmlspecialchars($patientId); ?></strong>
-                </div>
-                <div>
-                    <span>First Name</span>
-                    <strong><?php echo htmlspecialchars($patient['first_name']); ?></strong>
-                </div>
-                <div>
-                    <span>Middle Name</span>
-                    <strong>
-                        <?php echo htmlspecialchars($patient['middle_name'] ?: 'N/A'); ?>
-                    </strong>
-                </div>
-                <div>
-                    <span>Last Name</span>
-                    <strong><?php echo htmlspecialchars($patient['last_name']); ?></strong>
-                </div>
-                <div>
-                    <span>Birth Date</span>
-                    <strong><?php echo htmlspecialchars($patient['birth_date']); ?></strong>
-                </div>
-                <div>
-                    <span>Sex</span>
-                    <strong><?php echo htmlspecialchars($patient['sex']); ?></strong>
-                </div>
-                <div>
-                    <span>Contact Number</span>
-                    <strong><?php echo htmlspecialchars($patient['contact_number']); ?></strong>
-                </div>
-                <div>
-                    <span>Address</span>
-                    <strong><?php echo htmlspecialchars($patient['address']); ?></strong>
-                </div>
-                <div>
-                    <span>Email</span>
-                    <strong><?php echo htmlspecialchars($_SESSION['email']); ?></strong>
-                </div>
-                <div>
-                    <span>Date Registered</span>
-                    <strong><?php echo htmlspecialchars($patient['date_registered']); ?></strong>
+        </div>
+        <div class="card mb-4">
+            <div class="head">
+                <h3>Contact Information</h3>
+            </div>
+            <form method="POST">
+                <div class="settings-grid">
+                    <div class="form-group">
+                        <label for="contact_number">Contact Number</label>
+                        <input type="text" id="contact_number" name="contact_number" value="<?php echo htmlspecialchars($patient['contact_number']); ?>" required>
                     </div>
+                    <div class="form-group">
+                        <label for="address">Address</label>
+                        <input type="text" id="address" name="address" value="<?php echo htmlspecialchars($patient['address']); ?>" required>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit">
+                        <i class="fa-solid fa-floppy-disk"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+        <div class="card mb-4">
+            <div class="head">
+                <h3>Personal Information</h3>
             </div>
-        </section>
+            <div class="settings-grid">
+                <div class="form-group">
+                    <label>Patient ID</label>
+                    <input type="text" value="<?php echo htmlspecialchars($patientId); ?>" readonly>
+                </div>
+                <div class="form-group">
+                    <label>First Name</label>
+                    <input type="text" value="<?php echo htmlspecialchars($patient['first_name']); ?>" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Middle Name</label>
+                    <input type="text" value="<?php echo htmlspecialchars($patient['middle_name'] ?: 'N/A'); ?>" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Last Name</label>
+                    <input type="text" value="<?php echo htmlspecialchars($patient['last_name']); ?>" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Birth Date</label>
+                    <input type="text" value="<?php echo htmlspecialchars($patient['birth_date']); ?>" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Sex</label>
+                    <input type="text" value="<?php echo htmlspecialchars($patient['sex']); ?>" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Date Registered</label>
+                    <input type="text" value="<?php echo htmlspecialchars($patient['date_registered']); ?>" readonly>
+                </div>
+            </div>
+            <p class="settings-note">Need to correct your personal information? Please contact the clinic.</p>
+        </div>
     </div>
 </main>
 
 <script src="profile.js"></script>
-
 </body>
 </html>
