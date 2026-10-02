@@ -507,3 +507,63 @@ a {
     font-size: 11px;
     margin-top: 5px;
 }
+
+@media (max-width: 1024px) {
+    .navbar-container {
+        padding: 0 20px;
+    }
+
+    .content {
+        padding: 20px;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .navbar-container {
+        padding: 0 20px;
+    }
+
+    .content {
+        padding: 20px;
+    }
+
+    .logo img {
+        width: 48px;
+        height: 48px;
+    }
+
+    .account-icon {
+        width: 30px;
+        height: 30px;
+    }
+
+    .account-info {
+        display: none;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .welcome {
+        padding: 20px;
+    }
+
+    .welcome h1 {
+        font-size: 21px;
+    }
+
+    .welcome p {
+        font-size: 11px;
+    }
+
+    .welcome-icon {
+        width: 50px;
+        height: 50px;
+        font-size: 20px;
+    }
+}
