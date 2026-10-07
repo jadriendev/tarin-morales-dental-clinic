@@ -7,58 +7,34 @@ $appointment_rows = [];
 $appointment_total = 0;
 $appointment_completed = 0;
 $appointment_pending = 0;
-$example_patients = [
-    'Alyssa Cruz', 'Bea Santos', 'Carlos Mendoza', 'Diana Reyes', 'Elijah Garcia',
-    'Frances Lim', 'Gabriel Tan', 'Hannah Flores', 'Ivan Navarro', 'Julia Ramos'
-];
-
-$patients_map = [];
-$patients_result = mysqli_query($link, "SELECT * FROM tbl_patients");
-if ($patients_result) {
-    while ($patient_row = mysqli_fetch_assoc($patients_result)) {
-        $patient_keys = array_keys($patient_row);
-        $patient_key = $patient_keys[0] ?? null;
-        foreach ($patient_keys as $key) {
-            if (stripos($key, 'id') !== false) {
-                $patient_key = $key;
-                break;
-            }
-        }
-        if ($patient_key !== null) {
-            $patients_map[$patient_row[$patient_key]] = $patient_row;
-        }
-    }
+$stats_result = mysqli_query($link, "SELECT COUNT(*) AS total,
+    SUM(LOWER(status) = 'completed') AS completed,
+    SUM(LOWER(status) IN ('pending', 'confirmed', 'for_dentist', 'in_progress')) AS pending
+    FROM tbl_appointments");
+if ($stats_result && $stats = mysqli_fetch_assoc($stats_result)) {
+    $appointment_total = (int) ($stats['total'] ?? 0);
+    $appointment_completed = (int) ($stats['completed'] ?? 0);
+    $appointment_pending = (int) ($stats['pending'] ?? 0);
 }
 
-$appointments_result = mysqli_query($link, "SELECT * FROM tbl_appointments ORDER BY appointment_date DESC, appointment_time ASC");
-if ($appointments_result) {
+$appointments_sql = "SELECT a.appointment_id, a.patient_id, a.appointment_date, a.appointment_time,
+        a.procedure_name, a.reason, a.status,
+        CONCAT_WS(' ', p.first_name, NULLIF(p.middle_name, ''), p.last_name) AS patient_name
+    FROM tbl_appointments a
+    INNER JOIN tbl_patients p ON p.patient_id = a.patient_id
+    WHERE (? = '' OR CONCAT_WS(' ', p.first_name, NULLIF(p.middle_name, ''), p.last_name) LIKE ?
+        OR a.procedure_name LIKE ? OR a.status LIKE ?)
+    ORDER BY a.appointment_date DESC, a.appointment_time ASC";
+$appointments_stmt = mysqli_prepare($link, $appointments_sql);
+if ($appointments_stmt) {
+    $search_like = '%' . $search_term . '%';
+    mysqli_stmt_bind_param($appointments_stmt, 'ssss', $search_term, $search_like, $search_like, $search_like);
+    mysqli_stmt_execute($appointments_stmt);
+    $appointments_result = mysqli_stmt_get_result($appointments_stmt);
     while ($appointment = mysqli_fetch_assoc($appointments_result)) {
-        $patient_id = $appointment['patient_id'] ?? $appointment['patientid'] ?? 1;
-        $patient = $patients_map[$patient_id] ?? [];
-        $patient_name = $patient['fullname'] ?? $patient['name'] ?? $patient['first_name'] ?? 'Unknown Patient';
-        $status = $appointment['status'] ?? 'Pending';
-
-        if ($search_term !== '' && stripos($patient_name, $search_term) === false && stripos($status, $search_term) === false) {
-            continue;
-        }
-
-        $appointment_data = [
-            'id' => $appointment['id'] ?? 1,
-            'patient_id' => $patient_id,
-            'patient_name' => $patient_name,
-            'date' => $appointment['appointment_date'] ?? '',
-            'time' => $appointment['appointment_time'] ?? '',
-            'status' => $status
-        ];
-        $appointment_rows[] = $appointment_data;
-
-        $appointment_total++;
-        if ($status === 'Completed') {
-            $appointment_completed++;
-        } else {
-            $appointment_pending++;
-        }
+        $appointment_rows[] = $appointment;
     }
+    mysqli_stmt_close($appointments_stmt);
 }
 ?>
 <!DOCTYPE html>
@@ -99,8 +75,8 @@ if ($appointments_result) {
     </style>
 </head>
 <body class="login-gradient-bg min-h-screen font-sans text-slate-800">
-<div class="w-full min-h-screen bg-white overflow-hidden flex flex-col md:flex-row">
-    <aside class="w-full md:w-72 bg-white border-r border-slate-100 flex flex-col justify-between p-6">
+<div class="w-full min-h-screen md:h-screen bg-white overflow-hidden flex flex-col md:flex-row">
+    <aside class="w-full md:w-72 md:h-screen md:sticky md:top-0 md:shrink-0 bg-white border-r border-slate-100 flex flex-col justify-between p-6">
         <div>
             <div class="flex items-center gap-3.5 pb-6 border-b border-slate-100 mb-6">
                 <div class="w-14 h-14 rounded-full bg-purple-50 border-2 border-purple-200 flex items-center justify-center overflow-hidden shadow-md flex-shrink-0">
@@ -114,14 +90,13 @@ if ($appointments_result) {
             <nav class="space-y-1.5">
                 <a href="dentist-dashboard.php" class="nav-option flex items-center gap-3.5 px-4 py-3 rounded-xl text-slate-600 font-medium transition"><i class="fa-solid fa-house-chimney w-5 text-blue-600"></i><span>Dashboard</span></a>
                 <a href="appointments.php" class="flex items-center gap-3.5 px-4 py-3 rounded-xl btn-gradient text-white font-medium shadow-md transition"><i class="fa-solid fa-calendar-days w-5"></i><span>Appointments</span></a>
-                <a href="patient-profile.php?id=1" class="nav-option flex items-center gap-3.5 px-4 py-3 rounded-xl text-slate-600 font-medium transition"><i class="fa-solid fa-user-group w-5 text-blue-600"></i><span>Patients</span></a>
-                <a href="add-prescription.php?patient_id=1" class="nav-option flex items-center gap-3.5 px-4 py-3 rounded-xl text-slate-600 font-medium transition"><i class="fa-solid fa-prescription w-5 text-blue-600"></i><span>Prescription</span></a>
+                <a href="patients.php" class="nav-option flex items-center gap-3.5 px-4 py-3 rounded-xl text-slate-600 font-medium transition"><i class="fa-solid fa-user-group w-5 text-blue-600"></i><span>Patients</span></a>
             </nav>
         </div>
         <div class="pt-6 border-t border-slate-100"><a href="logout.php" class="flex items-center gap-3.5 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 font-medium transition"><i class="fa-solid fa-right-from-bracket w-5"></i><span>Logout</span></a></div>
     </aside>
 
-    <main class="flex-1 flex flex-col bg-slate-50/50">
+    <main class="flex-1 min-h-0 md:h-screen md:overflow-hidden flex flex-col bg-slate-50/50">
         <header class="bg-white border-b border-slate-100 px-6 py-4 min-h-[104px] flex items-center justify-between shadow-sm">
             <div>
                 <h2 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Appointments</h2>
@@ -133,7 +108,7 @@ if ($appointments_result) {
             </div>
         </header>
 
-        <div class="p-6 md:p-8 flex-1 overflow-y-auto">
+        <div class="p-6 md:p-8 flex-1 min-h-0 overflow-y-auto">
             <div class="mb-8">
                 <div>
                     <p class="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Schedule overview</p>
@@ -160,24 +135,21 @@ if ($appointments_result) {
                 </div>
                 <div class="max-h-[300px] overflow-auto">
                     <table class="w-full text-left border-collapse">
-                        <thead><tr class="sticky top-0 z-10 bg-white border-b border-slate-100 text-xs font-semibold text-slate-400 uppercase tracking-wider"><th class="py-3 px-4">Patient Name</th><th class="py-3 px-4">Time</th><th class="py-3 px-4">Status</th><th class="py-3 px-4 text-right">Actions</th></tr></thead>
+                        <thead><tr class="sticky top-0 z-10 bg-white border-b border-slate-100 text-xs font-semibold text-slate-400 uppercase tracking-wider"><th class="py-3 px-4">Patient Name</th><th class="py-3 px-4">Date</th><th class="py-3 px-4">Time</th><th class="py-3 px-4">Status</th><th class="py-3 px-4 text-right">Actions</th></tr></thead>
                         <tbody class="divide-y divide-slate-100 text-sm">
                             <?php if (count($appointment_rows) > 0): ?>
                                 <?php foreach ($appointment_rows as $appointment): ?>
+                                    <?php $status = ucfirst(str_replace('_', ' ', strtolower($appointment['status'] ?? 'pending'))); ?>
                                     <tr class="hover:bg-slate-50/80 transition">
                                         <td class="py-4 px-4 font-medium text-blue-600"><?= htmlspecialchars($appointment['patient_name']) ?></td>
-                                        <td class="py-4 px-4 text-blue-600"><?= htmlspecialchars($appointment['time']) ?></td>
-                                        <td class="py-4 px-4"><span class="px-3 py-1 rounded-full text-xs font-semibold <?= $appointment['status'] === 'Completed' ? 'bg-green-50 text-green-700' : ($appointment['status'] === 'Cancelled' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700') ?>"><?= htmlspecialchars($appointment['status']) ?></span></td>
-                                        <td class="py-4 px-4 text-right space-x-2"><a href="add-prescription.php?patient_id=<?= urlencode((string) $appointment['patient_id']) ?>" class="text-xs bg-blue-50 text-brandBlue px-3 py-1.5 rounded-lg font-medium hover:bg-blue-100 transition">Rx</a><a href="complete-appointment.php?id=<?= urlencode((string) $appointment['id']) ?>" class="text-xs bg-blue-50 text-brandBlue px-3 py-1.5 rounded-lg font-medium hover:bg-blue-100 transition">Complete</a></td>
+                                        <td class="py-4 px-4 text-slate-600"><?= htmlspecialchars(date('M j, Y', strtotime($appointment['appointment_date']))) ?></td>
+                                        <td class="py-4 px-4 text-slate-600"><?= htmlspecialchars(date('g:i A', strtotime($appointment['appointment_time']))) ?></td>
+                                        <td class="py-4 px-4"><span class="px-3 py-1 rounded-full text-xs font-semibold <?= strtolower($appointment['status']) === 'completed' ? 'bg-green-50 text-green-700' : (in_array(strtolower($appointment['status']), ['cancelled', 'no_show'], true) ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700') ?>"><?= htmlspecialchars($status) ?></span></td>
+                                        <td class="py-4 px-4 text-right"><a href="patient-profile.php?id=<?= (int) $appointment['patient_id'] ?>&amp;appointment_id=<?= (int) $appointment['appointment_id'] ?>" class="inline-flex items-center gap-2 text-xs bg-blue-50 text-brandBlue px-3 py-1.5 rounded-lg font-medium hover:bg-blue-100 transition"><i class="fa-regular fa-eye"></i> View</a></td>
                                     </tr>
                                 <?php endforeach; ?>
-                            <?php elseif ($search_term === ''): ?>
-                                <?php foreach ($example_patients as $example_index => $example_patient): ?>
-                                    <?php $example_time = sprintf('%02d:%s', 8 + intdiv($example_index, 2), $example_index % 2 === 0 ? '00' : '30'); $example_status = $example_index < 3 ? 'Completed' : ($example_index === 3 ? 'Cancelled' : 'Pending'); ?>
-                                    <tr class="hover:bg-slate-50/80 transition"><td class="py-4 px-4 font-medium text-blue-600"><?= htmlspecialchars($example_patient) ?></td><td class="py-4 px-4 text-blue-600"><?= $example_time ?></td><td class="py-4 px-4"><span class="px-3 py-1 rounded-full text-xs font-semibold <?= $example_status === 'Completed' ? 'bg-green-50 text-green-700' : ($example_status === 'Cancelled' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700') ?>"><?= $example_status ?></span></td><td class="py-4 px-4 text-right space-x-2"><a href="add-prescription.php?patient_id=1" class="text-xs bg-blue-50 text-brandBlue px-3 py-1.5 rounded-lg font-medium hover:bg-blue-100 transition">Rx</a><a href="complete-appointment.php?id=1" class="text-xs bg-blue-50 text-brandBlue px-3 py-1.5 rounded-lg font-medium hover:bg-blue-100 transition">Complete</a></td></tr>
-                                <?php endforeach; ?>
                             <?php else: ?>
-                                <tr><td colspan="4" class="text-center py-12 text-slate-400">No appointments found.</td></tr>
+                                <tr><td colspan="5" class="text-center py-12 text-slate-400">No appointments found.</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>

@@ -317,10 +317,118 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     box-shadow: 0 6px 16px rgba(147, 51, 234, 0.35);
   }
 
+  .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
   .btn-secondary {
     background: var(--gradient-subtle);
     color: var(--text-main);
     border: 1px solid var(--border-color);
+  }
+
+  /* ===== Confirmation Modal ===== */
+  .confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 9999;
+  }
+
+  .confirm-overlay.is-open {
+    display: flex;
+    animation: confirmFade 0.15s ease;
+  }
+
+  .confirm-modal {
+    background: var(--surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: confirmPop 0.2s ease;
+  }
+
+  .confirm-header {
+    padding: 20px 24px 12px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .confirm-header h3 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    color: var(--text-main);
+  }
+
+  .confirm-header p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .confirm-body {
+    padding: 8px 24px;
+  }
+
+  .confirm-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px dashed var(--border-color);
+    font-size: 14px;
+  }
+
+  .confirm-row:last-child {
+    border-bottom: none;
+  }
+
+  .confirm-label {
+    flex: 0 0 120px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .confirm-value {
+    flex: 1;
+    text-align: right;
+    color: var(--text-main);
+    font-weight: 600;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+
+  .confirm-value.is-empty {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-style: italic;
+  }
+
+  .confirm-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px 20px;
+    border-top: 1px solid var(--border-color);
+  }
+
+  @keyframes confirmFade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @keyframes confirmPop {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
   }
 
   @media (max-width: 768px) {
@@ -330,6 +438,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     .form-group.full-width {
       grid-column: span 1;
+    }
+
+    .confirm-row {
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .confirm-label {
+      flex: none;
+    }
+
+    .confirm-value {
+      text-align: left;
     }
   }
 </style>
@@ -355,7 +476,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   <?php endif; ?>
 
-  <form action="" method="POST">
+  <form id="appointmentForm" action="" method="POST">
 
     <div class="form-grid">
 
@@ -462,5 +583,156 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </form>
 
 </div>
+
+<!-- Confirmation Modal -->
+<div
+  class="confirm-overlay"
+  id="confirmOverlay"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="confirmTitle"
+>
+  <div class="confirm-modal">
+
+    <div class="confirm-header">
+      <h3 id="confirmTitle">Confirm Appointment</h3>
+      <p>Please double-check the details below before sending to the dentist.</p>
+    </div>
+
+    <div class="confirm-body">
+      <div class="confirm-row">
+        <span class="confirm-label">Patient</span>
+        <span class="confirm-value" id="cfPatient"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Dentist</span>
+        <span class="confirm-value" id="cfDentist"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Date</span>
+        <span class="confirm-value" id="cfDate"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Time</span>
+        <span class="confirm-value" id="cfTime"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Procedure</span>
+        <span class="confirm-value" id="cfProcedure"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Reason / Notes</span>
+        <span class="confirm-value" id="cfReason"></span>
+      </div>
+    </div>
+
+    <div class="confirm-footer">
+      <button type="button" class="btn btn-secondary" id="confirmEdit">
+        <i class="fa-solid fa-pen"></i>
+        Edit
+      </button>
+
+      <button type="button" class="btn btn-primary" id="confirmSend">
+        <i class="fa-solid fa-paper-plane"></i>
+        Confirm &amp; Send
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var form      = document.getElementById('appointmentForm');
+  var overlay   = document.getElementById('confirmOverlay');
+  var btnEdit   = document.getElementById('confirmEdit');
+  var btnSend   = document.getElementById('confirmSend');
+
+  function setValue(id, text, emptyText) {
+    var el = document.getElementById(id);
+    var value = (text || '').trim();
+
+    if (value === '') {
+      el.textContent = emptyText || '—';
+      el.classList.add('is-empty');
+    } else {
+      el.textContent = value; // textContent = safe from HTML injection
+      el.classList.remove('is-empty');
+    }
+  }
+
+  function selectedText(selectEl) {
+    var opt = selectEl.options[selectEl.selectedIndex];
+    return opt ? opt.text.replace(/\s+/g, ' ').trim() : '';
+  }
+
+  function formatDate(value) {
+    if (!value) return '';
+    var d = new Date(value + 'T00:00:00');
+    if (isNaN(d.getTime())) return value;
+    return d.toLocaleDateString('en-PH', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  }
+
+  function formatTime(value) {
+    if (!value) return '';
+    var parts = value.split(':');
+    var h = parseInt(parts[0], 10);
+    var m = parts[1] || '00';
+    var suffix = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return h + ':' + m + ' ' + suffix;
+  }
+
+  function openModal() {
+    setValue('cfPatient',   selectedText(form.patient_id));
+    setValue('cfDentist',   selectedText(form.dentist_id));
+    setValue('cfDate',      formatDate(form.appointment_date.value));
+    setValue('cfTime',      formatTime(form.appointment_time.value));
+    setValue('cfProcedure', form.procedure_name.value);
+    setValue('cfReason',    form.reason.value, 'None');
+
+    btnSend.disabled = false;
+    overlay.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+    btnSend.focus();
+  }
+
+  function closeModal() {
+    overlay.classList.remove('is-open');
+    document.body.style.overflow = '';
+  }
+
+  // Intercept the submit: browser validation (required fields) runs first,
+  // then we show the modal instead of sending right away.
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    openModal();
+  });
+
+  btnEdit.addEventListener('click', closeModal);
+
+  btnSend.addEventListener('click', function () {
+    btnSend.disabled = true; // prevent double submit
+    form.submit();           // programmatic submit does not re-trigger the listener
+  });
+
+  // Close when clicking the dark background
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) closeModal();
+  });
+
+  // Close with Escape
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('is-open')) {
+      closeModal();
+    }
+  });
+})();
+</script>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>
