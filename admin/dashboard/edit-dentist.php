@@ -71,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist) {
 
         $first_name = trim($_POST['first_name'] ?? '');
         $last_name = trim($_POST['last_name'] ?? '');
+        $username = trim($_POST['username'] ?? '');
         $specialization = trim($_POST['specialization'] ?? '');
         $license_no = trim($_POST['license_no'] ?? '');
         $status = trim($_POST['status'] ?? 'active');
@@ -79,6 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist) {
         if (
             $first_name === '' ||
             $last_name === '' ||
+            $username === '' ||
             $license_no === ''
         ) {
 
@@ -91,6 +93,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist) {
         } elseif (strlen($last_name) > 100) {
 
             $error_message = "Last name must not exceed 100 characters.";
+
+        } elseif (strlen($username) > 55) {
+
+            $error_message = "Username must not exceed 55 characters.";
 
         } elseif (strlen($license_no) > 50) {
 
@@ -121,7 +127,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist) {
                     ':dentist_id' => $dentist_id
                 ]);
 
-                if ($stmtLicense->fetch()) {
+                $stmtUsername = $pdo->prepare("
+                    SELECT dentist_id
+                    FROM tbl_dentists
+                    WHERE username = :username
+                    AND dentist_id != :dentist_id
+                    LIMIT 1
+                ");
+
+                $stmtUsername->execute([
+                    ':username' => $username,
+                    ':dentist_id' => $dentist_id
+                ]);
+
+                if ($stmtUsername->fetch()) {
+
+                    $error_message = "The username is already taken by another dentist.";
+
+                } elseif ($stmtLicense->fetch()) {
 
                     $error_message = "The license number is already assigned to another dentist.";
 
@@ -138,6 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist) {
                         $stmtUpdate = $pdo->prepare("
                             UPDATE tbl_dentists
                             SET
+                                username = :username,
                                 first_name = :first_name,
                                 last_name = :last_name,
                                 specialization = :specialization,
@@ -147,6 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist) {
                         ");
 
                         $stmtUpdate->execute([
+                            ':username' => $username,
                             ':first_name' => $first_name,
                             ':last_name' => $last_name,
                             ':specialization' => $specialization !== ''
@@ -180,6 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist) {
 
                         $success_message = "Dentist updated successfully.";
 
+                        $dentist['username'] = $username;
                         $dentist['first_name'] = $first_name;
                         $dentist['last_name'] = $last_name;
                         $dentist['specialization'] = $specialization;
@@ -311,15 +337,163 @@ include __DIR__ . '/includes/header.php';
     background: #7e22ce;
   }
 
+  .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
   .btn-secondary {
     background: #f3f4f6;
     color: #374151;
     border: 1px solid #d1d5db;
   }
 
+  .confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 9999;
+  }
+
+  .confirm-overlay.is-open {
+    display: flex;
+    animation: confirmFade 0.15s ease;
+  }
+
+  .confirm-modal {
+    background: var(--surface, #fff);
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: var(--radius-lg, 12px);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: confirmPop 0.2s ease;
+  }
+
+  .confirm-header {
+    padding: 20px 24px 12px;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+  }
+
+  .confirm-header h3 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    color: var(--text-main, #111827);
+  }
+
+  .confirm-header p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted, #6b7280);
+  }
+
+  .confirm-body {
+    padding: 8px 24px;
+  }
+
+  .confirm-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px dashed var(--border-color, #e5e7eb);
+    font-size: 14px;
+  }
+
+  .confirm-row:last-child {
+    border-bottom: none;
+  }
+
+  .confirm-label {
+    flex: 0 0 120px;
+    font-weight: 600;
+    color: var(--text-muted, #6b7280);
+  }
+
+  .confirm-value {
+    flex: 1;
+    text-align: right;
+    color: var(--text-main, #111827);
+    font-weight: 600;
+    word-break: break-word;
+  }
+
+  .confirm-value.is-empty {
+    color: var(--text-muted, #6b7280);
+    font-weight: 400;
+    font-style: italic;
+  }
+
+  .toggle-pass {
+    background: none;
+    border: none;
+    padding: 0 0 0 8px;
+    cursor: pointer;
+    color: var(--brand-purple, #9333ea);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .confirm-badge {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .confirm-badge.active {
+    background: #dcfce7;
+    color: #15803d;
+  }
+
+  .confirm-badge.inactive {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
+
+  .confirm-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px 20px;
+    border-top: 1px solid var(--border-color, #e5e7eb);
+  }
+
+  @keyframes confirmFade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @keyframes confirmPop {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
   @media (max-width: 768px) {
     .form-grid {
       grid-template-columns: 1fr;
+    }
+
+    .confirm-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    .confirm-label {
+      flex: none;
+    }
+
+    .confirm-value {
+      text-align: left;
     }
   }
 </style>
@@ -363,7 +537,7 @@ include __DIR__ . '/includes/header.php';
 
   <?php if ($dentist): ?>
 
-    <form action="" method="POST">
+    <form id="editDentistForm" action="" method="POST">
 
       <input
         type="hidden"
@@ -474,6 +648,34 @@ include __DIR__ . '/includes/header.php';
 
         <div class="form-group">
 
+          <label for="username">
+            Username *
+          </label>
+
+          <input
+            type="text"
+            id="username"
+            name="username"
+            value="<?php
+            echo htmlspecialchars(
+                $dentist['username'] ?? '',
+                ENT_QUOTES,
+                'UTF-8'
+            );
+            ?>"
+            maxlength="55"
+            placeholder="e.g. drsmith"
+            required
+          >
+
+          <span class="form-hint">
+            Changing this also changes the username the dentist logs in with.
+          </span>
+
+        </div>
+
+        <div class="form-group">
+
           <label for="status">
             Active Status
           </label>
@@ -551,6 +753,185 @@ include __DIR__ . '/includes/header.php';
       </div>
 
     </form>
+
+    <div
+      class="confirm-overlay"
+      id="confirmOverlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirmTitle"
+    >
+      <div class="confirm-modal">
+
+        <div class="confirm-header">
+          <h3 id="confirmTitle">Confirm Changes</h3>
+          <p>Please double-check the details below before saving.</p>
+        </div>
+
+        <div class="confirm-body">
+          <div class="confirm-row">
+            <span class="confirm-label">First Name</span>
+            <span class="confirm-value" id="cfFirstName"></span>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">Last Name</span>
+            <span class="confirm-value" id="cfLastName"></span>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">Username</span>
+            <span class="confirm-value" id="cfUsername"></span>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">Specialization</span>
+            <span class="confirm-value" id="cfSpecialization"></span>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">License No.</span>
+            <span class="confirm-value" id="cfLicense"></span>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">Status</span>
+            <span class="confirm-value" id="cfStatus"></span>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">New Password</span>
+            <span class="confirm-value">
+              <span id="cfPassword"></span>
+              <button type="button" class="toggle-pass" id="togglePass">Show</button>
+            </span>
+          </div>
+        </div>
+
+        <div class="confirm-footer">
+          <button type="button" class="btn btn-secondary" id="confirmEdit">
+            <i class="fa-solid fa-pen"></i>
+            Edit
+          </button>
+
+          <button type="button" class="btn btn-primary" id="confirmSave">
+            <i class="fa-solid fa-floppy-disk"></i>
+            Confirm &amp; Save
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <script>
+    (function () {
+      var form       = document.getElementById('editDentistForm');
+      var overlay    = document.getElementById('confirmOverlay');
+      var btnEdit    = document.getElementById('confirmEdit');
+      var btnSave    = document.getElementById('confirmSave');
+      var btnToggle  = document.getElementById('togglePass');
+      var cfPassword = document.getElementById('cfPassword');
+
+      var passwordVisible = false;
+
+      function setValue(id, text, emptyText) {
+        var el = document.getElementById(id);
+        var value = (text || '').trim();
+
+        if (value === '') {
+          el.textContent = emptyText || '—';
+          el.classList.add('is-empty');
+        } else {
+          el.textContent = value;
+          el.classList.remove('is-empty');
+        }
+      }
+
+      function renderPassword() {
+        var pw = form.password.value;
+
+        if (pw === '') {
+          cfPassword.textContent = 'Unchanged';
+          cfPassword.style.fontWeight = '400';
+          cfPassword.style.fontStyle = 'italic';
+          cfPassword.style.letterSpacing = 'normal';
+          btnToggle.style.display = 'none';
+          return;
+        }
+
+        cfPassword.style.fontWeight = '';
+        cfPassword.style.fontStyle = '';
+        btnToggle.style.display = '';
+
+        if (passwordVisible) {
+          cfPassword.textContent = pw;
+          cfPassword.style.letterSpacing = 'normal';
+          btnToggle.textContent = 'Hide';
+        } else {
+          cfPassword.textContent = '•'.repeat(Math.min(pw.length, 20));
+          cfPassword.style.letterSpacing = '2px';
+          btnToggle.textContent = 'Show';
+        }
+      }
+
+      function renderStatus() {
+        var el = document.getElementById('cfStatus');
+        var value = form.status.value;
+
+        el.textContent = '';
+
+        var badge = document.createElement('span');
+        badge.className = 'confirm-badge ' + (value === 'inactive' ? 'inactive' : 'active');
+        badge.textContent = value.charAt(0).toUpperCase() + value.slice(1);
+
+        el.appendChild(badge);
+      }
+
+      function openModal() {
+        setValue('cfFirstName',      form.first_name.value);
+        setValue('cfLastName',       form.last_name.value);
+        setValue('cfUsername',       form.username.value);
+        setValue('cfSpecialization', form.specialization.value, 'None');
+        setValue('cfLicense',        form.license_no.value);
+
+        passwordVisible = false;
+        renderPassword();
+        renderStatus();
+
+        btnSave.disabled = false;
+        overlay.classList.add('is-open');
+        document.body.style.overflow = 'hidden';
+        btnSave.focus();
+      }
+
+      function closeModal() {
+        overlay.classList.remove('is-open');
+        document.body.style.overflow = '';
+        passwordVisible = false;
+      }
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        openModal();
+      });
+
+      btnToggle.addEventListener('click', function () {
+        passwordVisible = !passwordVisible;
+        renderPassword();
+      });
+
+      btnEdit.addEventListener('click', closeModal);
+
+      btnSave.addEventListener('click', function () {
+        btnSave.disabled = true;
+        form.submit();
+      });
+
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) closeModal();
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && overlay.classList.contains('is-open')) {
+          closeModal();
+        }
+      });
+    })();
+    </script>
 
   <?php else: ?>
 

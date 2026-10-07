@@ -342,10 +342,146 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     box-shadow: 0 6px 16px rgba(147, 51, 234, 0.35);
   }
 
+  .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
   .btn-secondary {
     background: var(--gradient-subtle);
     color: var(--text-main);
     border: 1px solid var(--border-color);
+  }
+
+  .confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 9999;
+  }
+
+  .confirm-overlay.is-open {
+    display: flex;
+    animation: confirmFade 0.15s ease;
+  }
+
+  .confirm-modal {
+    background: var(--surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 540px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: confirmPop 0.2s ease;
+  }
+
+  .confirm-header {
+    padding: 20px 24px 12px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .confirm-header h3 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    color: var(--text-main);
+  }
+
+  .confirm-header p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .confirm-body {
+    padding: 8px 24px;
+  }
+
+  .confirm-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px dashed var(--border-color);
+    font-size: 14px;
+  }
+
+  .confirm-row:last-child {
+    border-bottom: none;
+  }
+
+  .confirm-label {
+    flex: 0 0 130px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .confirm-value {
+    flex: 1;
+    text-align: right;
+    color: var(--text-main);
+    font-weight: 600;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+
+  .confirm-value.is-empty {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-style: italic;
+  }
+
+  .toggle-pass {
+    background: none;
+    border: none;
+    padding: 0 0 0 8px;
+    cursor: pointer;
+    color: var(--brand-purple);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .confirm-badge {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .confirm-badge.active {
+    background: #dcfce7;
+    color: #15803d;
+  }
+
+  .confirm-badge.inactive {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
+
+  .confirm-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px 20px;
+    border-top: 1px solid var(--border-color);
+  }
+
+  @keyframes confirmFade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @keyframes confirmPop {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
   }
 
   @media (max-width: 768px) {
@@ -357,6 +493,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .form-group.full-width,
     .form-grid-3 {
       grid-column: span 1;
+    }
+
+    .confirm-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    .confirm-label {
+      flex: none;
+    }
+
+    .confirm-value {
+      text-align: left;
     }
   }
 </style>
@@ -382,7 +532,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   <?php endif; ?>
 
-  <form action="" method="POST">
+  <form id="patientForm" action="" method="POST">
 
     <input
       type="hidden"
@@ -502,6 +652,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           id="password"
           name="password"
           required
+          minlength="6"
           placeholder="Minimum 6 characters"
         >
       </div>
@@ -555,5 +706,204 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   </form>
 </div>
+
+<div
+  class="confirm-overlay"
+  id="confirmOverlay"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="confirmTitle"
+>
+  <div class="confirm-modal">
+
+    <div class="confirm-header">
+      <h3 id="confirmTitle">Confirm Patient Details</h3>
+      <p>Please double-check the details below before saving.</p>
+    </div>
+
+    <div class="confirm-body">
+      <div class="confirm-row">
+        <span class="confirm-label">Full Name</span>
+        <span class="confirm-value" id="cfName"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Birth Date</span>
+        <span class="confirm-value" id="cfBirth"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Sex</span>
+        <span class="confirm-value" id="cfSex"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Contact Number</span>
+        <span class="confirm-value" id="cfContact"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Address</span>
+        <span class="confirm-value" id="cfAddress"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Username</span>
+        <span class="confirm-value" id="cfUsername"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Email</span>
+        <span class="confirm-value" id="cfEmail"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Password</span>
+        <span class="confirm-value">
+          <span id="cfPassword"></span>
+          <button type="button" class="toggle-pass" id="togglePass">Show</button>
+        </span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Account Status</span>
+        <span class="confirm-value" id="cfStatus"></span>
+      </div>
+    </div>
+
+    <div class="confirm-footer">
+      <button type="button" class="btn btn-secondary" id="confirmEdit">
+        <i class="fa-solid fa-pen"></i>
+        Edit
+      </button>
+
+      <button type="button" class="btn btn-primary" id="confirmSave">
+        <i class="fa-solid fa-user-plus"></i>
+        Confirm &amp; Save
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var form       = document.getElementById('patientForm');
+  var overlay    = document.getElementById('confirmOverlay');
+  var btnEdit    = document.getElementById('confirmEdit');
+  var btnSave    = document.getElementById('confirmSave');
+  var btnToggle  = document.getElementById('togglePass');
+  var cfPassword = document.getElementById('cfPassword');
+
+  var passwordVisible = false;
+
+  function setValue(id, text, emptyText) {
+    var el = document.getElementById(id);
+    var value = (text || '').trim();
+
+    if (value === '') {
+      el.textContent = emptyText || '—';
+      el.classList.add('is-empty');
+    } else {
+      el.textContent = value;
+      el.classList.remove('is-empty');
+    }
+  }
+
+  function fullName() {
+    return [
+      form.first_name.value,
+      form.middle_name.value,
+      form.last_name.value
+    ].map(function (part) {
+      return part.trim();
+    }).filter(function (part) {
+      return part !== '';
+    }).join(' ');
+  }
+
+  function formatDate(value) {
+    if (!value) return '';
+    var d = new Date(value + 'T00:00:00');
+    if (isNaN(d.getTime())) return value;
+    return d.toLocaleDateString('en-PH', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  }
+
+  function renderPassword() {
+    var pw = form.password.value;
+
+    if (passwordVisible) {
+      cfPassword.textContent = pw;
+      cfPassword.style.letterSpacing = 'normal';
+      btnToggle.textContent = 'Hide';
+    } else {
+      cfPassword.textContent = '•'.repeat(Math.min(pw.length, 20));
+      cfPassword.style.letterSpacing = '2px';
+      btnToggle.textContent = 'Show';
+    }
+  }
+
+  function renderStatus() {
+    var el = document.getElementById('cfStatus');
+    var value = form.account_status.value;
+
+    el.textContent = '';
+
+    var badge = document.createElement('span');
+    badge.className = 'confirm-badge ' + (value === 'inactive' ? 'inactive' : 'active');
+    badge.textContent = value.charAt(0).toUpperCase() + value.slice(1);
+
+    el.appendChild(badge);
+  }
+
+  function openModal() {
+    setValue('cfName',     fullName());
+    setValue('cfBirth',    formatDate(form.birth_date.value));
+    setValue('cfSex',      form.sex.value);
+    setValue('cfContact',  form.contact_number.value);
+    setValue('cfAddress',  form.address.value);
+    setValue('cfUsername', form.username.value);
+    setValue('cfEmail',    form.email.value);
+
+    passwordVisible = false;
+    renderPassword();
+    renderStatus();
+
+    btnSave.disabled = false;
+    overlay.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+    btnSave.focus();
+  }
+
+  function closeModal() {
+    overlay.classList.remove('is-open');
+    document.body.style.overflow = '';
+    passwordVisible = false;
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    openModal();
+  });
+
+  btnToggle.addEventListener('click', function () {
+    passwordVisible = !passwordVisible;
+    renderPassword();
+  });
+
+  btnEdit.addEventListener('click', closeModal);
+
+  btnSave.addEventListener('click', function () {
+    btnSave.disabled = true;
+    form.submit();
+  });
+
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) closeModal();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('is-open')) {
+      closeModal();
+    }
+  });
+})();
+</script>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>
