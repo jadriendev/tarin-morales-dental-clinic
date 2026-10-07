@@ -2,23 +2,21 @@
 require_once 'config.php';
 require_once 'session-checker.php';
 
-$appointment_id = $_GET['id'] ?? 1;
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $notes = trim($_POST['notes']);
-    $outcome = trim($_POST['outcome']);
-
-    $sql = "UPDATE tbl_appointments SET status = 'Completed', notes = ?, outcome = ? WHERE id = ?";
-    $stmt = mysqli_prepare($link, $sql);
-    if ($stmt) {
-        mysqli_stmt_bind_param($stmt, "ssi", $notes, $outcome, $appointment_id);
-        if (mysqli_stmt_execute($stmt)) {
-            $_SESSION['success_msg'] = "Appointment marked as complete.";
-            header("location: dentist-dashboard.php");
-            exit();
-        }
+$appointment_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT) ?: 0;
+$stmt = mysqli_prepare($link, 'SELECT patient_id FROM tbl_appointments WHERE appointment_id = ? LIMIT 1');
+if ($stmt) {
+    mysqli_stmt_bind_param($stmt, 'i', $appointment_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $appointment = mysqli_fetch_assoc($result);
+    mysqli_stmt_close($stmt);
+    if ($appointment) {
+        header('Location: patient-profile.php?id=' . (int) $appointment['patient_id'] . '&appointment_id=' . $appointment_id);
+        exit();
     }
 }
+header('Location: appointments.php');
+exit();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -42,8 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body class="login-gradient-bg min-h-screen font-sans text-slate-800">
-<div class="w-full min-h-screen bg-white overflow-hidden flex flex-col md:flex-row">
-    <aside class="w-full md:w-72 bg-white border-r border-slate-100 flex flex-col justify-between p-6">
+<div class="w-full min-h-screen md:h-screen bg-white overflow-hidden flex flex-col md:flex-row">
+    <aside class="w-full md:w-72 md:h-screen md:sticky md:top-0 md:shrink-0 bg-white border-r border-slate-100 flex flex-col justify-between p-6">
         <div>
             <div class="flex items-center gap-3.5 pb-6 border-b border-slate-100 mb-6">
                 <div class="w-14 h-14 rounded-full bg-purple-50 border-2 border-purple-200 flex items-center justify-center overflow-hidden shadow-md flex-shrink-0">
@@ -57,13 +55,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <nav class="space-y-1.5">
                 <a href="dentist-dashboard.php" class="nav-option flex items-center gap-3.5 px-4 py-3 rounded-xl text-slate-600 font-medium transition"><i class="fa-solid fa-house-chimney w-5 text-blue-600"></i><span>Dashboard</span></a>
                 <a href="appointments.php" class="nav-option flex items-center gap-3.5 px-4 py-3 rounded-xl text-slate-600 font-medium transition"><i class="fa-solid fa-calendar-days w-5 text-blue-600"></i><span>Appointments</span></a>
-                <a href="patient-profile.php?id=1" class="nav-option flex items-center gap-3.5 px-4 py-3 rounded-xl text-slate-600 font-medium transition"><i class="fa-solid fa-user-group w-5 text-blue-600"></i><span>Patients</span></a>
-                <a href="add-prescription.php?patient_id=1" class="nav-option flex items-center gap-3.5 px-4 py-3 rounded-xl text-slate-600 font-medium transition"><i class="fa-solid fa-prescription w-5 text-blue-600"></i><span>Prescription</span></a>
+                <a href="patients.php" class="nav-option flex items-center gap-3.5 px-4 py-3 rounded-xl text-slate-600 font-medium transition"><i class="fa-solid fa-user-group w-5 text-blue-600"></i><span>Patients</span></a>
             </nav>
         </div>
         <div class="pt-6 border-t border-slate-100"><a href="logout.php" class="flex items-center gap-3.5 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 font-medium transition"><i class="fa-solid fa-right-from-bracket w-5"></i><span>Logout</span></a></div>
     </aside>
-    <main class="flex-1 flex flex-col bg-slate-50/50">
+    <main class="flex-1 min-h-0 md:h-screen md:overflow-hidden flex flex-col bg-slate-50/50">
         <header class="bg-white border-b border-slate-100 px-6 py-4 min-h-[104px] flex items-center justify-between shadow-sm">
             <h2 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Complete Appointment</h2>
             <div class="flex items-center gap-5">
@@ -71,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="dentist-profile flex items-center gap-3 px-1.5 py-1 rounded-full"><div class="dentist-avatar w-11 h-11 rounded-full flex items-center justify-center text-lg shadow-sm"><i class="fa-solid fa-user-doctor"></i></div><span class="dentist-label font-bold text-base pr-4">Dentist</span></div>
             </div>
         </header>
-        <div class="p-6 md:p-8 flex-1 overflow-y-auto">
+        <div class="p-6 md:p-8 flex-1 min-h-0 overflow-y-auto">
             <div class="max-w-3xl mx-auto bg-white rounded-2xl border border-blue-100 shadow-md p-6 md:p-8">
                 <div class="flex items-center gap-3 pb-5 border-b border-slate-100 mb-6">
                     <a href="dentist-dashboard.php" class="w-10 h-10 rounded-xl icon-blue flex items-center justify-center hover:bg-blue-100 transition"><i class="fa-solid fa-arrow-left"></i></a>
