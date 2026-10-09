@@ -603,7 +603,7 @@ $js_data = [
     admin: {
       label: 'Administrator',
       plural: 'Administrators',
-      editUrl: 'edit-admin.php',
+      editUrl: 'account-settings.php',
       fields: [
         ['ID', 'id'],
         ['Username', 'username'],
