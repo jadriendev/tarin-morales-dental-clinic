@@ -328,6 +328,107 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     color: var(--text-main);
     border: 1px solid var(--border-color);
   }
+                                                                                                                                                           
+  .confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 9999;
+  }
+
+  .confirm-overlay.is-open {
+    display: flex;
+    animation: confirmFade 0.15s ease;
+  }
+
+  .confirm-modal {
+    background: var(--surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: confirmPop 0.2s ease;
+  }
+
+  .confirm-header {
+    padding: 20px 24px 12px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .confirm-header h3 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    color: var(--text-main);
+  }
+
+  .confirm-header p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .confirm-body {
+    padding: 8px 24px;
+  }
+
+  .confirm-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px dashed var(--border-color);
+    font-size: 14px;
+  }
+
+  .confirm-row:last-child {
+    border-bottom: none;
+  }
+
+  .confirm-label {
+    flex: 0 0 120px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .confirm-value {
+    flex: 1;
+    text-align: right;
+    color: var(--text-main);
+    font-weight: 600;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+
+  .confirm-value.is-empty {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-style: italic;
+  }
+
+  .confirm-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px 20px;
+    border-top: 1px solid var(--border-color);
+  }
+
+  @keyframes confirmFade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @keyframes confirmPop {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
 
   /* ===== Confirmation Modal ===== */
   .confirm-overlay {
@@ -584,7 +685,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 </div>
 
-<!-- Confirmation Modal -->
 <div
   class="confirm-overlay"
   id="confirmOverlay"
@@ -648,6 +748,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   var btnEdit   = document.getElementById('confirmEdit');
   var btnSend   = document.getElementById('confirmSend');
 
+  document.body.appendChild(overlay);
+
   function setValue(id, text, emptyText) {
     var el = document.getElementById(id);
     var value = (text || '').trim();
@@ -656,7 +758,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       el.textContent = emptyText || '—';
       el.classList.add('is-empty');
     } else {
-      el.textContent = value; // textContent = safe from HTML injection
+      el.textContent = value;
       el.classList.remove('is-empty');
     }
   }
@@ -707,8 +809,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     document.body.style.overflow = '';
   }
 
-  // Intercept the submit: browser validation (required fields) runs first,
-  // then we show the modal instead of sending right away.
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     openModal();
@@ -717,16 +817,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   btnEdit.addEventListener('click', closeModal);
 
   btnSend.addEventListener('click', function () {
-    btnSend.disabled = true; // prevent double submit
-    form.submit();           // programmatic submit does not re-trigger the listener
+    btnSend.disabled = true;
+    form.submit();
   });
 
-  // Close when clicking the dark background
   overlay.addEventListener('click', function (e) {
     if (e.target === overlay) closeModal();
   });
 
-  // Close with Escape
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && overlay.classList.contains('is-open')) {
       closeModal();

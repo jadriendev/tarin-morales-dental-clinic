@@ -235,7 +235,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     border: 1px solid var(--border-color);
   }
 
-  /* ===== Confirmation Modal ===== */
   .confirm-overlay {
     position: fixed;
     inset: 0;
@@ -528,7 +527,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </form>
 </div>
 
-<!-- Confirmation Modal -->
 <div
   class="confirm-overlay"
   id="confirmOverlay"
@@ -611,7 +609,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       el.textContent = emptyText || '—';
       el.classList.add('is-empty');
     } else {
+<<<<<<< HEAD
       el.textContent = value; // textContent = safe from HTML injection
+=======
+      el.textContent = value;
+>>>>>>> admin
       el.classList.remove('is-empty');
     }
   }
@@ -666,8 +668,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     passwordVisible = false;
   }
 
-  // Intercept submit: browser validation (required, minlength) runs first,
-  // then the modal is shown instead of saving right away.
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     openModal();
@@ -681,16 +681,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   btnEdit.addEventListener('click', closeModal);
 
   btnSave.addEventListener('click', function () {
-    btnSave.disabled = true; // prevent double submit
-    form.submit();           // programmatic submit does not re-trigger the listener
+    btnSave.disabled = true;
+    form.submit();
   });
 
-  // Close when clicking the dark background
   overlay.addEventListener('click', function (e) {
     if (e.target === overlay) closeModal();
   });
 
-  // Close with Escape
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && overlay.classList.contains('is-open')) {
       closeModal();
