@@ -328,7 +328,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     color: var(--text-main);
     border: 1px solid var(--border-color);
   }
- **                                                                                                                                                             
+                                                                                                                                                           
   .confirm-overlay {
     position: fixed;
     inset: 0;
@@ -645,6 +645,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   var overlay   = document.getElementById('confirmOverlay');
   var btnEdit   = document.getElementById('confirmEdit');
   var btnSend   = document.getElementById('confirmSend');
+
+  document.body.appendChild(overlay);
 
   function setValue(id, text, emptyText) {
     var el = document.getElementById(id);
