@@ -1,8 +1,12 @@
 <?php
+require_once __DIR__ . '/../db.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+  session_start();
+}
+
 $page_title = "New Appointment";
 $header_title = "Schedule Appointment";
-
-include __DIR__ . '/includes/header.php';
 
 $success_message = '';
 $error_message   = '';
@@ -15,6 +19,7 @@ $appointment_time = $_POST['appointment_time'] ?? '';
 $procedure_name   = $_POST['procedure_name'] ?? '';
 $reason           = $_POST['reason'] ?? '';
 $status           = $_POST['status'] ?? 'pending';
+$admin_id         = (int) ($_SESSION['admin_id'] ?? 0);
 
 // Allowed statuses for strict backend validation
 $allowed_statuses = ['pending', 'confirmed', 'completed', 'cancelled'];
@@ -44,8 +49,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $status           = trim($status);
 
     // Backend Form Validation
-    if (empty($patient_id) || empty($appointment_date) || empty($appointment_time) || empty($procedure_name)) {
-        $error_message = "Please fill in all required fields (Patient, Date, Time, and Procedure).";
+    if ($admin_id < 1) {
+      $error_message = "Please sign in as an administrator before scheduling an appointment.";
+    } elseif (empty($patient_id) || empty($dentist_id) || empty($appointment_date) || empty($appointment_time) || empty($procedure_name)) {
+      $error_message = "Please fill in all required fields (Patient, Dentist, Date, Time, and Procedure).";
     } elseif (!in_array($status, $allowed_statuses, true)) {
         $error_message = "Invalid appointment status selected.";
     } else {
@@ -72,15 +79,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Insert Record
             $stmt = $pdo->prepare("
-                INSERT INTO tbl_appointments 
-                    (patient_id, dentist_id, appointment_date, appointment_time, procedure_name, reason, status, created_at) 
+                INSERT INTO tbl_appointments
+                  (patient_id, dentist_id, admin_id, appointment_date, appointment_time, procedure_name, reason, status, created_at)
                 VALUES 
-                    (:patient_id, :dentist_id, :appointment_date, :appointment_time, :procedure_name, :reason, :status, NOW())
+                  (:patient_id, :dentist_id, :admin_id, :appointment_date, :appointment_time, :procedure_name, :reason, :status, NOW())
             ");
 
             $stmt->execute([
                 ':patient_id'       => $patient_id,
                 ':dentist_id'       => $dentist_id ?: null,
+                ':admin_id'         => $admin_id,
                 ':appointment_date' => $appointment_date,
                 ':appointment_time' => $appointment_time,
                 ':procedure_name'   => $procedure_name,
@@ -101,6 +109,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+include __DIR__ . '/includes/header.php';
 ?>
 
 <style>
@@ -259,8 +269,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
 
       <div class="form-group">
-        <label for="dentist_id">Assigned Dentist</label>
-        <select id="dentist_id" name="dentist_id">
+        <label for="dentist_id">Assigned Dentist *</label>
+        <select id="dentist_id" name="dentist_id" required>
           <option value="">-- Choose Dentist --</option>
           <?php foreach ($dentists as $d): ?>
             <option value="<?php echo htmlspecialchars($d['dentist_id'], ENT_QUOTES, 'UTF-8'); ?>"

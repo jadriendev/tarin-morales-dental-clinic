@@ -34,11 +34,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    $stmt = $pdo->prepare("SELECT admin_id, user_id, first_name, last_name, password, status FROM tbl_admins WHERE admin_id = :admin_id LIMIT 1");
+    $stmt = $pdo->prepare("SELECT admin_id, username, first_name, last_name, password, status FROM tbl_admins WHERE admin_id = :admin_id LIMIT 1");
     $stmt->execute(['admin_id' => $inputAdminId]);
     $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$admin || !password_verify($password, $admin['password'])) {
+    if (!$admin) {
         header("Location: login.php?error=invalid_credentials");
         exit();
     }
@@ -48,15 +48,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
+    $stored_password = (string) $admin['password'];
+    $password_valid = password_verify($password, $stored_password);
+    $legacy_password = !$password_valid && hash_equals($stored_password, $password);
+    if (!$password_valid && !$legacy_password) {
+        header("Location: login.php?error=invalid_credentials");
+        exit();
+    }
+
+    if ($legacy_password || password_needs_rehash($stored_password, PASSWORD_DEFAULT)) {
+        $new_hash = password_hash($password, PASSWORD_DEFAULT);
+        $updatePassword = $pdo->prepare("UPDATE tbl_admins SET password = :password WHERE admin_id = :admin_id");
+        $updatePassword->execute(['password' => $new_hash, 'admin_id' => $admin['admin_id']]);
+    }
+
     session_regenerate_id(true);
     unset($_SESSION['csrf_token']);
 
     $_SESSION['admin_id']  = $admin['admin_id'];
-    $_SESSION['user_id']   = $admin['user_id'];
+    $_SESSION['user_id']   = $admin['admin_id'];
     $_SESSION['full_name'] = $admin['first_name'] . ' ' . $admin['last_name'];
+    $_SESSION['admin_name'] = $_SESSION['full_name'];
     $_SESSION['role']      = 'admin';
 
-    header("Location: admindashboard.php");
+    header("Location: dashboard/dashboard.php");
     exit();
 }
 
@@ -116,7 +131,7 @@ $isLoggedInAdmin = isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 
             <p class="text-gray-500 mb-4 break-all"><?php echo htmlspecialchars($_SESSION["full_name"] ?? 'Admin'); ?></p>
 
             <div class="space-y-2">
-                <a href="admindashboard.php"
+                <a href="dashboard/dashboard.php"
                    class="inline-block w-full py-2.5 rounded-lg text-white font-medium hover:opacity-90 transition text-center"
                    style="background: linear-gradient(to right, #2E9FE0, #9A2FC9);">
                    Go to Dashboard

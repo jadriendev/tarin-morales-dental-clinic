@@ -7,14 +7,13 @@ include __DIR__ . '/includes/header.php';
 $stmtDentists = $pdo->query("
     SELECT 
         d.dentist_id,
+        d.username,
         d.first_name,
         d.last_name,
         d.license_no,
         d.specialization,
-        d.status,
-        u.email
+        d.status
     FROM tbl_dentists d
-    LEFT JOIN tbl_users u ON d.user_id = u.user_id
     ORDER BY d.dentist_id ASC
 ");
 $dentists = $stmtDentists->fetchAll(PDO::FETCH_ASSOC);
@@ -33,7 +32,7 @@ $dentists = $stmtDentists->fetchAll(PDO::FETCH_ASSOC);
           <th>Name</th>
           <th>License No.</th>
           <th>Specialization</th>
-          <th>Email</th>
+          <th>Username</th>
           <th>Status</th>
           <th>Action</th>
         </tr>
@@ -46,7 +45,7 @@ $dentists = $stmtDentists->fetchAll(PDO::FETCH_ASSOC);
               <td class="patient-cell">Dr. <?php echo htmlspecialchars($d['first_name'] . ' ' . $d['last_name'], ENT_QUOTES, 'UTF-8'); ?></td>
               <td><?php echo htmlspecialchars($d['license_no'] ?? 'N/A', ENT_QUOTES, 'UTF-8'); ?></td>
               <td><?php echo htmlspecialchars(!empty($d['specialization']) ? $d['specialization'] : 'General Dentistry', ENT_QUOTES, 'UTF-8'); ?></td>
-              <td><?php echo htmlspecialchars($d['email'] ?? 'N/A', ENT_QUOTES, 'UTF-8'); ?></td>
+              <td><?php echo htmlspecialchars($d['username'] ?? 'N/A', ENT_QUOTES, 'UTF-8'); ?></td>
               <td>
                 <?php $status_class = strtolower($d['status'] ?? 'active'); ?>
                 <span class="status <?php echo htmlspecialchars($status_class, ENT_QUOTES, 'UTF-8'); ?>">
