@@ -24,12 +24,17 @@ function json_out(array $data, int $code = 200): void
 if (isset($_GET['action']) && $_GET['action'] === 'get') {
     $recordId = (int)($_GET['id'] ?? 0);
 
-    $st = $pdo->prepare("SELECT patient_id FROM tbl_dental_records WHERE record_id = ?");
+    $st = $pdo->prepare("
+        SELECT patient_id, appointment_id, treatment_id
+        FROM tbl_dental_records
+        WHERE record_id = ?
+    ");
     $st->execute([$recordId]);
-    $patientId = (int)$st->fetchColumn();
-    if (!$patientId) {
+    $rec = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$rec) {
         json_out(['ok' => false, 'message' => 'Record not found.'], 404);
     }
+    $patientId = (int)$rec['patient_id'];
 
     $st = $pdo->prepare("
         SELECT p.*, u.email
@@ -46,26 +51,15 @@ if (isset($_GET['action']) && $_GET['action'] === 'get') {
         $p['last_name']
     );
 
-    // Teeth: current state per patient; fallback to this record's findings
+    // Teeth: only the findings saved for this specific record
     $st = $pdo->prepare("
         SELECT tooth_number, tooth_condition, remarks
-        FROM tbl_patient_teeth
-        WHERE patient_id = ?
+        FROM tbl_tooth_conditions
+        WHERE record_id = ?
         ORDER BY CAST(tooth_number AS UNSIGNED), tooth_number
     ");
-    $st->execute([$patientId]);
+    $st->execute([$recordId]);
     $teeth = $st->fetchAll(PDO::FETCH_ASSOC);
-
-    if (!$teeth) {
-        $st = $pdo->prepare("
-            SELECT tooth_number, tooth_condition, remarks
-            FROM tbl_tooth_conditions
-            WHERE record_id = ?
-            ORDER BY CAST(tooth_number AS UNSIGNED), tooth_number
-        ");
-        $st->execute([$recordId]);
-        $teeth = $st->fetchAll(PDO::FETCH_ASSOC);
-    }
 
     $st = $pdo->prepare("
         SELECT a.appointment_id, a.appointment_date, a.appointment_time,
@@ -73,10 +67,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'get') {
                CONCAT('Dr. ', d.first_name, ' ', d.last_name) AS dentist
         FROM tbl_appointments a
         LEFT JOIN tbl_dentists d ON d.dentist_id = a.dentist_id
-        WHERE a.patient_id = ?
-        ORDER BY a.appointment_date DESC, a.appointment_time DESC
+        WHERE a.appointment_id = ? AND a.patient_id = ?
     ");
-    $st->execute([$patientId]);
+    $st->execute([(int)$rec['appointment_id'], $patientId]);
     $appointments = $st->fetchAll(PDO::FETCH_ASSOC);
 
     $st = $pdo->prepare("
@@ -85,10 +78,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'get') {
                a.appointment_date
         FROM tbl_treatments t
         INNER JOIN tbl_appointments a ON a.appointment_id = t.appointment_id
-        WHERE a.patient_id = ?
-        ORDER BY a.appointment_date DESC, t.treatment_id DESC
+        WHERE t.treatment_id = ? AND a.patient_id = ?
     ");
-    $st->execute([$patientId]);
+    $st->execute([(int)$rec['treatment_id'], $patientId]);
     $sessions = $st->fetchAll(PDO::FETCH_ASSOC);
 
     json_out([
@@ -116,12 +108,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'save')
     }
 
     $recordId = (int)($in['record_id'] ?? 0);
-    $st = $pdo->prepare("SELECT patient_id FROM tbl_dental_records WHERE record_id = ?");
+    $st = $pdo->prepare("
+        SELECT patient_id, appointment_id, treatment_id
+        FROM tbl_dental_records
+        WHERE record_id = ?
+    ");
     $st->execute([$recordId]);
-    $patientId = (int)$st->fetchColumn();
-    if (!$patientId) {
+    $rec = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$rec) {
         json_out(['ok' => false, 'message' => 'Record not found.'], 404);
     }
+    $patientId = (int)$rec['patient_id'];
+    $recAppt   = (int)$rec['appointment_id'];
+    $recTreat  = (int)$rec['treatment_id'];
 
     $balance = $in['remaining_balance'] ?? '';
     if (!is_numeric($balance) || (float)$balance < 0) {
@@ -144,6 +143,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'save')
             WHERE appointment_id = ? AND patient_id = ?
         ");
         foreach (($in['appointments'] ?? []) as $a) {
+            if ((int)($a['appointment_id'] ?? 0) !== $recAppt) {
+                continue;
+            }
             $date = (string)($a['appointment_date'] ?? '');
             $time = (string)($a['appointment_time'] ?? '');
             if (strlen($time) === 5) {
@@ -181,6 +183,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'save')
             WHERE t.treatment_id = ? AND a.patient_id = ?
         ");
         foreach (($in['sessions'] ?? []) as $s) {
+            if ((int)($s['treatment_id'] ?? 0) !== $recTreat) {
+                continue;
+            }
             $proc = trim((string)($s['procedure_name'] ?? ''));
             if ($proc === '' || !in_array($s['status'] ?? '', $sessStatuses, true)) {
                 throw new RuntimeException('Please complete all session fields correctly.');
