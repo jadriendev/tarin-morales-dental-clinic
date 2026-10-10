@@ -4,17 +4,15 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once 'db.php';
-
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'patient') {
     header("Location: login.php?error=unauthorized");
     exit();
 }
 
 $userId = $_SESSION['user_id'];
-
 $stmt = $pdo->prepare("
     SELECT patient_id, first_name, middle_name, last_name, birth_date, sex,
-           contact_number, address, date_registered, remaining_balance, remaining_sessions
+           contact_number, address, date_registered, remaining_balance, remaining_session
     FROM tbl_patients
     WHERE user_id = :user_id
     LIMIT 1
@@ -22,7 +20,6 @@ $stmt = $pdo->prepare("
 
 $stmt->execute(['user_id' => $userId]);
 $patient = $stmt->fetch(PDO::FETCH_ASSOC);
-
 if (!$patient) {
     header("Location: login.php?error=unauthorized");
     exit();
@@ -32,8 +29,11 @@ $appointmentStmt = $pdo->prepare("
     SELECT appointment_date, appointment_time, procedure_name, status
     FROM tbl_appointments
     WHERE patient_id = :patient_id
-      AND appointment_date >= CURDATE()
-      AND status IN ('pending', 'confirmed')
+    AND (
+        appointment_date > CURDATE()
+        OR (appointment_date = CURDATE() AND appointment_time >= CURTIME())
+    )
+    AND status IN ('pending', 'confirmed')
     ORDER BY appointment_date ASC, appointment_time ASC
     LIMIT 1
 ");
@@ -49,9 +49,7 @@ $teethStmt = $pdo->prepare("
 
 $teethStmt->execute(['patient_id' => $patient['patient_id']]);
 $teethRecords = $teethStmt->fetchAll(PDO::FETCH_ASSOC);
-
 $teethConcernCount = 0;
-
 foreach ($teethRecords as $tooth) {
     if (!empty($tooth['tooth_condition']) && strtolower($tooth['tooth_condition']) !== 'good') {
         $teethConcernCount++;
@@ -59,22 +57,11 @@ foreach ($teethRecords as $tooth) {
 }
 
 $teethStatus = $teethConcernCount > 0 ? 'Needs Attention' : 'Good';
-
-$fullName = trim(
-    $patient['first_name'] . ' ' .
-    ($patient['middle_name'] ? $patient['middle_name'] . ' ' : '') .
-    $patient['last_name']
-);
-
+$fullName = trim($patient['first_name'] . ' ' . ($patient['middle_name'] ? $patient['middle_name'] . ' ' : '') . $patient['last_name']);
 $displayName = $patient['first_name'];
-
-$patientId = 'P-' . str_pad(
-    $patient['patient_id'],
-    4,
-    '0',
-    STR_PAD_LEFT
-);
-
+$remainingBalance = (float)($patient['remaining_balance'] ?? 0);
+$remainingSessions = $patient['remaining_session'] ?? '0';
+$patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
 ?>
 
 <!DOCTYPE html>
@@ -83,25 +70,19 @@ $patientId = 'P-' . str_pad(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Patient Dashboard | Tarin-Morales Dental Clinic</title>
-
     <link rel="stylesheet" href="user.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
     <link rel="shortcut icon" href="../images/logo.jpg" type="image/x-icon">
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css"
-          crossorigin="anonymous"
-          referrerpolicy="no-referrer">
-
-    <link rel="shortcut icon" href="../images/logo.jpg" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 </head>
-
 <body>
 <header class="navbar">
     <div class="navbar-container">
         <a class="logo">
-            <img src="../images/logo.jpg" alt="Tarin-Morales Dental Clinic"> </a>
+            <img src="../images/logo.jpg" alt="Tarin-Morales Dental Clinic">
+        </a>
         <div class="account-container">
             <div class="account" onclick="toggleAccountMenu()">
                 <div class="account-icon">
@@ -120,12 +101,12 @@ $patientId = 'P-' . str_pad(
                 </a>
                 <a href="login.php?logout=1" title="Logout">
                     <i class="fa-solid fa-right-from-bracket"></i>
-                    <span>Logout</span> </a>
+                    <span>Logout</span>
+                </a>
             </div>
         </div>
     </div>
 </header>
-
 <main class="main-content">
     <div class="content">
         <section class="welcome">
@@ -167,7 +148,7 @@ $patientId = 'P-' . str_pad(
                 <h3>Teeth Condition Status</h3>
                 <div class="status-good">
                     <span></span>
-                    Good
+                    <?php echo htmlspecialchars($teethStatus); ?>
                 </div>
                 <p>View your current teeth condition.</p>
                 <div class="card-footer">
@@ -183,9 +164,7 @@ $patientId = 'P-' . str_pad(
                     <i class="fa-solid fa-arrow-up-right-from-square card-arrow"></i>
                 </div>
                 <h3>Remaining Balance</h3>
-                <strong class="card-number">
-                    ₱ <?php echo number_format((float)$patient['remaining_balance'], 2); ?>
-                </strong>
+                <strong class="card-number">₱ <?php echo number_format($remainingBalance, 2); ?></strong>
                 <p>Outstanding balance.</p>
                 <div class="card-footer">
                     <span>View balance</span>
@@ -200,7 +179,7 @@ $patientId = 'P-' . str_pad(
                     <i class="fa-solid fa-arrow-up-right-from-square card-arrow"></i>
                 </div>
                 <h3>Remaining Sessions</h3>
-                <strong class="card-number">2 Sessions</strong>
+                <strong class="card-number"><?php echo $remainingSessions; ?> Sessions</strong>
                 <p>Sessions left to complete.</p>
                 <div class="card-footer">
                     <span>View history</span>
@@ -212,7 +191,7 @@ $patientId = 'P-' . str_pad(
                     <div class="card-icon appointment">
                         <i class="fa-regular fa-calendar-days"></i>
                     </div>
-                    <span class="appointment-status">No appointment</span>
+                    <span class="appointment-status"><?php echo $nextAppointment ? 'Scheduled' : 'No appointment'; ?></span>
                 </div>
                 <h3>Next Appointment</h3>
                 <?php if ($nextAppointment): ?>
@@ -221,8 +200,8 @@ $patientId = 'P-' . str_pad(
                     </strong>
                     <p>
                         <?php echo date('h:i A', strtotime($nextAppointment['appointment_time'])); ?>
-                        -
-                        <?php echo htmlspecialchars($nextAppointment['procedure_name']); ?> </p>
+                        - <?php echo htmlspecialchars($nextAppointment['procedure_name']); ?>
+                    </p>
                 <?php else: ?>
                     <strong class="appointment-empty">No upcoming appointment</strong>
                     <p>Your appointment will be scheduled by the clinic.</p>
@@ -237,9 +216,7 @@ $patientId = 'P-' . str_pad(
 </main>
 <div class="modal" id="personalModal">
     <div class="modal-box">
-        <button class="close-button" onclick="closeModal('personalModal')">
-            &times;
-        </button>
+        <button class="close-button" onclick="closeModal('personalModal')">&times;</button>
         <div class="modal-icon personal">
             <i class="fa-solid fa-user"></i>
         </div>
@@ -271,23 +248,19 @@ $patientId = 'P-' . str_pad(
             </div>
             <div>
                 <span>Email</span>
-                <strong><?php echo htmlspecialchars($_SESSION['email']); ?></strong>
+                <strong><?php echo htmlspecialchars($_SESSION['email'] ?? ''); ?></strong>
             </div>
             <div>
                 <span>Date Registered</span>
-                <strong><?php echo htmlspecialchars($patient['date_registered']); ?></strong>
+                <strong><?php echo htmlspecialchars($patient['date_registered'] ?? ''); ?></strong>
             </div>
         </div>
-        <a href="profile/profile.php" class="modal-button">
-            View Full Profile
-        </a>
+        <a href="profile/profile.php" class="modal-button">View Full Profile</a>
     </div>
 </div>
 <div class="modal" id="teethModal">
     <div class="modal-box">
-        <button class="close-button" onclick="closeModal('teethModal')">
-            &times;
-        </button>
+        <button class="close-button" onclick="closeModal('teethModal')">&times;</button>
         <div class="modal-icon teeth">
             <i class="fa-solid fa-tooth"></i>
         </div>
@@ -295,22 +268,18 @@ $patientId = 'P-' . str_pad(
         <div class="information">
             <div>
                 <span>Current Status</span>
-                <strong class="good-text">
-                    <?php echo htmlspecialchars($teethStatus); ?>
-                </strong>
+                <strong class="good-text"><?php echo htmlspecialchars($teethStatus); ?></strong>
             </div>
             <div>
                 <span>Teeth with concerns</span>
-                <strong><?php echo $patient['teeth_concern_count']; ?></strong>
+                <strong><?php echo $teethConcernCount; ?></strong>
             </div>
         </div>
     </div>
 </div>
 <div class="modal" id="appointmentModal">
     <div class="modal-box">
-        <button class="close-button" onclick="closeModal('appointmentModal')">
-            &times;
-        </button>
+        <button class="close-button" onclick="closeModal('appointmentModal')">&times;</button>
         <div class="modal-icon appointment">
             <i class="fa-regular fa-calendar-days"></i>
         </div>
@@ -319,27 +288,19 @@ $patientId = 'P-' . str_pad(
             <div class="information">
                 <div>
                     <span>Date</span>
-                    <strong>
-                        <?php echo date('M d, Y', strtotime($nextAppointment['appointment_date'])); ?>
-                    </strong>
+                    <strong><?php echo date('M d, Y', strtotime($nextAppointment['appointment_date'])); ?></strong>
                 </div>
                 <div>
                     <span>Time</span>
-                    <strong>
-                        <?php echo date('h:i A', strtotime($nextAppointment['appointment_time'])); ?>
-                    </strong>
+                    <strong><?php echo date('h:i A', strtotime($nextAppointment['appointment_time'])); ?></strong>
                 </div>
                 <div>
                     <span>Procedure</span>
-                    <strong>
-                        <?php echo htmlspecialchars($nextAppointment['procedure_name']); ?>
-                    </strong>
+                    <strong><?php echo htmlspecialchars($nextAppointment['procedure_name']); ?></strong>
                 </div>
                 <div>
                     <span>Status</span>
-                    <strong>
-                        <?php echo htmlspecialchars(ucfirst($nextAppointment['status'])); ?>
-                    </strong>
+                    <strong><?php echo htmlspecialchars(ucfirst($nextAppointment['status'])); ?></strong>
                 </div>
             </div>
         <?php else: ?>
@@ -353,32 +314,26 @@ $patientId = 'P-' . str_pad(
 </div>
 <div class="modal" id="balanceModal">
     <div class="modal-box">
-        <button class="close-button" onclick="closeModal('balanceModal')">
-            &times;
-        </button>
+        <button class="close-button" onclick="closeModal('balanceModal')">&times;</button>
         <div class="modal-icon balance">
             <i class="fa-solid fa-wallet"></i>
         </div>
         <h2>Remaining Balance</h2>
-        <div class="balance-display">₱ <?php echo number_format((float)$patient['remaining_balance'], 2); ?> </div>
+        <div class="balance-display">₱ <?php echo number_format($remainingBalance, 2); ?></div>
         <p class="modal-note">Outstanding balance</p>
     </div>
 </div>
 <div class="modal" id="sessionsModal">
     <div class="modal-box">
-        <button class="close-button" onclick="closeModal('sessionsModal')">
-            &times;
-        </button>
+        <button class="close-button" onclick="closeModal('sessionsModal')">&times;</button>
         <div class="modal-icon sessions">
             <i class="fa-solid fa-clipboard-list"></i>
         </div>
         <h2>Remaining Sessions</h2>
-        <div class="balance-display"><?php echo $patient['remaining_sessions']; ?> Sessions</div>
+        <div class="balance-display"><?php echo $remainingSessions; ?> Sessions</div>
         <p class="modal-note">Sessions left to complete</p>
     </div>
 </div>
-
 <script src="user.js"></script>
-
 </body>
 </html>
