@@ -14,7 +14,7 @@ $userId = $_SESSION['user_id'];
 
 $stmt = $pdo->prepare("
     SELECT patient_id, first_name, middle_name, last_name, birth_date, sex,
-           contact_number, address, date_registered
+           contact_number, address, date_registered, remaining_balance, remaining_sessions
     FROM tbl_patients
     WHERE user_id = :user_id
     LIMIT 1
@@ -74,6 +74,7 @@ $patientId = 'P-' . str_pad(
     '0',
     STR_PAD_LEFT
 );
+
 ?>
 
 <!DOCTYPE html>
@@ -182,7 +183,9 @@ $patientId = 'P-' . str_pad(
                     <i class="fa-solid fa-arrow-up-right-from-square card-arrow"></i>
                 </div>
                 <h3>Remaining Balance</h3>
-                <strong class="card-number">₱ 6,900.00</strong>
+                <strong class="card-number">
+                    ₱ <?php echo number_format((float)$patient['remaining_balance'], 2); ?>
+                </strong>
                 <p>Outstanding balance.</p>
                 <div class="card-footer">
                     <span>View balance</span>
@@ -298,7 +301,7 @@ $patientId = 'P-' . str_pad(
             </div>
             <div>
                 <span>Teeth with concerns</span>
-                <strong><?php echo $teethConcernCount; ?></strong>
+                <strong><?php echo $patient['teeth_concern_count']; ?></strong>
             </div>
         </div>
     </div>
@@ -357,7 +360,7 @@ $patientId = 'P-' . str_pad(
             <i class="fa-solid fa-wallet"></i>
         </div>
         <h2>Remaining Balance</h2>
-        <div class="balance-display">₱ 6,900.00</div>
+        <div class="balance-display">₱ <?php echo number_format((float)$patient['remaining_balance'], 2); ?> </div>
         <p class="modal-note">Outstanding balance</p>
     </div>
 </div>
@@ -370,7 +373,7 @@ $patientId = 'P-' . str_pad(
             <i class="fa-solid fa-clipboard-list"></i>
         </div>
         <h2>Remaining Sessions</h2>
-        <div class="balance-display">2 Sessions</div>
+        <div class="balance-display"><?php echo $patient['remaining_sessions']; ?> Sessions</div>
         <p class="modal-note">Sessions left to complete</p>
     </div>
 </div>
