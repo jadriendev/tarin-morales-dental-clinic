@@ -22,7 +22,8 @@ $appointments_sql = "SELECT a.appointment_id, a.patient_id, a.appointment_date, 
         CONCAT_WS(' ', p.first_name, NULLIF(p.middle_name, ''), p.last_name) AS patient_name
     FROM tbl_appointments a
     INNER JOIN tbl_patients p ON p.patient_id = a.patient_id
-    WHERE (? = '' OR CONCAT_WS(' ', p.first_name, NULLIF(p.middle_name, ''), p.last_name) LIKE ?
+    WHERE LOWER(a.status) <> 'completed'
+        AND (? = '' OR CONCAT_WS(' ', p.first_name, NULLIF(p.middle_name, ''), p.last_name) LIKE ?
         OR a.procedure_name LIKE ? OR a.status LIKE ?)
     ORDER BY a.appointment_date DESC, a.appointment_time ASC";
 $appointments_stmt = mysqli_prepare($link, $appointments_sql);
