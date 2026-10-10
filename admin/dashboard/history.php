@@ -329,12 +329,6 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
                                 >
                                     View
                                 </a>
-                                <a
-                                    href="edit-history.php?id=<?php echo (int)$h['record_id']; ?>"
-                                    style="color: var(--brand-purple, #9333ea); text-decoration: none; font-weight: 600;"
-                                >
-                                    Edit
-                                </a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
