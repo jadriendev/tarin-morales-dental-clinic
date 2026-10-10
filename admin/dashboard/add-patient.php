@@ -66,10 +66,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // 1. Create user account
                     $hashed_password = password_hash($password, PASSWORD_DEFAULT);
                     $stmtUser = $pdo->prepare("
-                        INSERT INTO tbl_users (email, password, role, status, created_at) 
-                        VALUES (?, ?, 'patient', ?, NOW())
+                        INSERT INTO tbl_users (email, username, password, role, status, created_at)
+                        VALUES (?, ?, ?, 'patient', ?, NOW())
                     ");
-                    $stmtUser->execute([$email, $hashed_password, strtolower($account_status)]);
+                    $stmtUser->execute([$email, substr($email, 0, 55), $hashed_password, strtolower($account_status)]);
                     $user_id = $pdo->lastInsertId();
 
                     // 2. Create patient profile
@@ -84,8 +84,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $last_name,
                         $birth_date,
                         $sex,
-                        $contact_number !== '' ? $contact_number : null,
-                        $address !== '' ? $address : null
+                        $contact_number,
+                        $address
                     ]);
 
                     $pdo->commit();
