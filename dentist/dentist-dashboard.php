@@ -37,6 +37,7 @@ $appointments_sql = "SELECT a.appointment_id, a.patient_id, a.appointment_date, 
     FROM tbl_appointments a
     INNER JOIN tbl_patients p ON p.patient_id = a.patient_id
     WHERE a.appointment_date = ?
+        AND LOWER(a.status) <> 'completed'
         AND (? = '' OR CONCAT_WS(' ', p.first_name, NULLIF(p.middle_name, ''), p.last_name) LIKE ?)
     ORDER BY a.appointment_time ASC";
 $appointments_stmt = mysqli_prepare($link, $appointments_sql);
