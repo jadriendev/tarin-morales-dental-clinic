@@ -6,11 +6,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-/* ------------------------------------------------------------------
- * AJAX endpoints for the "View" modal (same file, runs before any HTML)
- * TODO: add your admin session check here, e.g.
- *   if (empty($_SESSION['admin_id'])) { http_response_code(403); exit; }
- * ------------------------------------------------------------------ */
 $csrf = $_SESSION['csrf_history'] ??= bin2hex(random_bytes(16));
 
 function json_out(array $data, int $code = 200): void
@@ -21,11 +16,17 @@ function json_out(array $data, int $code = 200): void
     exit;
 }
 
+function next_month_window(): array
+{
+    $first = new DateTimeImmutable('first day of next month');
+    return [$first->format('Y-m-01'), $first->format('Y-m-t'), $first->format('F Y')];
+}
+
 if (isset($_GET['action']) && $_GET['action'] === 'get') {
     $recordId = (int)($_GET['id'] ?? 0);
 
     $st = $pdo->prepare("
-        SELECT patient_id, appointment_id, treatment_id
+        SELECT patient_id, appointment_id, treatment_id, dentist_id
         FROM tbl_dental_records
         WHERE record_id = ?
     ");
@@ -51,7 +52,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'get') {
         $p['last_name']
     );
 
-    // Teeth: only the findings saved for this specific record
     $st = $pdo->prepare("
         SELECT tooth_number, tooth_condition, remarks
         FROM tbl_tooth_conditions
@@ -83,6 +83,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'get') {
     $st->execute([(int)$rec['treatment_id'], $patientId]);
     $sessions = $st->fetchAll(PDO::FETCH_ASSOC);
 
+    $dentistsList = $pdo->query("
+        SELECT dentist_id, CONCAT('Dr. ', first_name, ' ', last_name) AS full_name
+        FROM tbl_dentists
+        WHERE status = 'active'
+        ORDER BY last_name ASC, first_name ASC
+    ")->fetchAll(PDO::FETCH_ASSOC);
+    [$nextMin, $nextMax, $nextLabel] = next_month_window();
+
     json_out([
         'ok'      => true,
         'patient' => [
@@ -93,7 +101,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'get') {
             'address'           => $p['address'],
             'email'             => $p['email'] ?? '',
             'remaining_balance' => $p['remaining_balance'] ?? '0.00',
+            'remaining_session' => $p['remaining_session'] ?? '0',
         ],
+        'dentists'     => $dentistsList,
+        'default_dentist' => (int)$rec['dentist_id'],
+        'next_month'   => ['min' => $nextMin, 'max' => $nextMax, 'label' => $nextLabel],
         'teeth'        => $teeth,
         'appointments' => $appointments,
         'sessions'     => $sessions,
@@ -109,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'save')
 
     $recordId = (int)($in['record_id'] ?? 0);
     $st = $pdo->prepare("
-        SELECT patient_id, appointment_id, treatment_id
+        SELECT patient_id, appointment_id, treatment_id, dentist_id
         FROM tbl_dental_records
         WHERE record_id = ?
     ");
@@ -127,14 +139,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'save')
         json_out(['ok' => false, 'message' => 'Remaining balance must be a valid amount.'], 422);
     }
 
+    $sessionsLeft = $in['remaining_session'] ?? '';
+    if (!ctype_digit((string)$sessionsLeft)) {
+        json_out(['ok' => false, 'message' => 'Remaining sessions must be a whole number (0 or more).'], 422);
+    }
+
     $apptStatuses = ['pending','confirmed','for_dentist','in_progress','completed','cancelled','no_show'];
     $sessStatuses = ['in_progress','completed'];
 
     try {
         $pdo->beginTransaction();
 
-        $st = $pdo->prepare("UPDATE tbl_patients SET remaining_balance = ? WHERE patient_id = ?");
-        $st->execute([number_format((float)$balance, 2, '.', ''), $patientId]);
+        $st = $pdo->prepare("UPDATE tbl_patients SET remaining_balance = ?, remaining_session = ? WHERE patient_id = ?");
+        $st->execute([number_format((float)$balance, 2, '.', ''), (string)(int)$sessionsLeft, $patientId]);
 
         $upA = $pdo->prepare("
             UPDATE tbl_appointments
@@ -210,8 +227,106 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'save')
         }
         $msg = $e instanceof RuntimeException
             ? $e->getMessage()
-            : 'Could not save changes. Make sure the remaining_balance column exists.';
+            : 'Could not save changes. Please try again.';
         json_out(['ok' => false, 'message' => $msg], 500);
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'book') {
+    $in = json_decode(file_get_contents('php://input'), true);
+
+    if (!is_array($in) || !hash_equals($csrf, (string)($in['csrf'] ?? ''))) {
+        json_out(['ok' => false, 'message' => 'Invalid request.'], 400);
+    }
+
+    $adminId = (int)($_SESSION['admin_id'] ?? 0);
+    if ($adminId <= 0) {
+        json_out(['ok' => false, 'message' => 'Admin session not found. Please log in again.'], 401);
+    }
+
+    $recordId = (int)($in['record_id'] ?? 0);
+    $st = $pdo->prepare("SELECT patient_id, appointment_id FROM tbl_dental_records WHERE record_id = ?");
+    $st->execute([$recordId]);
+    $rec = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$rec) {
+        json_out(['ok' => false, 'message' => 'Record not found.'], 404);
+    }
+    $patientId = (int)$rec['patient_id'];
+
+    $dentistId = (int)($in['dentist_id'] ?? 0);
+    $date      = trim((string)($in['appointment_date'] ?? ''));
+    $time      = trim((string)($in['appointment_time'] ?? ''));
+    $proc      = trim((string)($in['procedure_name'] ?? ''));
+    $reason    = trim((string)($in['reason'] ?? ''));
+
+    try {
+        [$nextMin, $nextMax] = next_month_window();
+
+        $d = DateTime::createFromFormat('Y-m-d', $date);
+        if (!$d || $d->format('Y-m-d') !== $date) {
+            throw new RuntimeException('Please choose a valid date.');
+        }
+        if ($date < $nextMin || $date > $nextMax) {
+            throw new RuntimeException('The next appointment must be within next month.');
+        }
+
+        $t = DateTime::createFromFormat('H:i', $time);
+        if (!$t || $t->format('H:i') !== $time) {
+            throw new RuntimeException('Please choose a valid time.');
+        }
+        $time .= ':00';
+
+        if ($proc === '' || strlen($proc) > 150) {
+            throw new RuntimeException('Procedure is required (150 characters max).');
+        }
+
+        $st = $pdo->prepare("
+            SELECT p.patient_id
+            FROM tbl_patients p
+            INNER JOIN tbl_users u ON u.user_id = p.user_id
+            WHERE p.patient_id = ? AND u.status = 'active'
+        ");
+        $st->execute([$patientId]);
+        if (!$st->fetch()) {
+            throw new RuntimeException('This patient account is inactive.');
+        }
+
+        $st = $pdo->prepare("SELECT dentist_id FROM tbl_dentists WHERE dentist_id = ? AND status = 'active'");
+        $st->execute([$dentistId]);
+        if (!$st->fetch()) {
+            throw new RuntimeException('The selected dentist is not available.');
+        }
+
+        $st = $pdo->prepare("
+            SELECT COUNT(*) FROM tbl_appointments
+            WHERE dentist_id = ? AND appointment_date = ? AND appointment_time = ?
+              AND status NOT IN ('cancelled', 'no_show')
+        ");
+        $st->execute([$dentistId, $date, $time]);
+        if ($st->fetchColumn() > 0) {
+            throw new RuntimeException('That dentist is already booked for this date and time.');
+        }
+
+        $st = $pdo->prepare("
+            INSERT INTO tbl_appointments
+                (admin_id, patient_id, dentist_id, appointment_date, appointment_time,
+                 procedure_name, reason, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'for_dentist')
+        ");
+        $st->execute([
+            $adminId, $patientId, $dentistId, $date, $time, $proc,
+            $reason !== '' ? $reason : null,
+        ]);
+
+        json_out([
+            'ok'       => true,
+            'message'  => 'Next appointment booked.',
+        ]);
+    } catch (RuntimeException $e) {
+        json_out(['ok' => false, 'message' => $e->getMessage()], 422);
+    } catch (Throwable $e) {
+        error_log('History book error: ' . $e->getMessage());
+        json_out(['ok' => false, 'message' => 'Could not book the appointment. Please try again.'], 500);
     }
 }
 
@@ -254,7 +369,7 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
         <table>
             <thead>
                 <tr>
-                    <th>Record ID</th>
+                    <th>ID</th>
                     <th>Patient Name</th>
                     <th>Record Date</th>
                     <th>Attending Dentist</th>
@@ -269,7 +384,7 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
                     <?php foreach ($history as $h): ?>
                         <tr>
                             <td>
-                                #<?php echo htmlspecialchars(
+                                <?php echo htmlspecialchars(
                                     (string)$h['record_id'],
                                     ENT_QUOTES,
                                     'UTF-8'
@@ -348,43 +463,69 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
     </div>
 </div>
 
-<!-- ============ Patient History Modal (scoped styles, prefix hm-) ============ -->
 <style>
-    .hm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none;
+    .hm-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); display: none;
         align-items: center; justify-content: center; z-index: 9999; padding: 16px; }
-    .hm-overlay.open { display: flex; }
-    .hm-box { background: var(--card-bg, #fff); color: inherit; width: 100%; max-width: 860px;
-        max-height: 90vh; overflow-y: auto; border-radius: 12px; padding: 24px;
-        box-shadow: 0 10px 40px rgba(0,0,0,.25); }
-    .hm-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .hm-top h3 { margin: 0; }
-    .hm-x { background: none; border: 0; font-size: 26px; line-height: 1; cursor: pointer; color: inherit; }
-    .hm-sec { margin-top: 22px; }
-    .hm-sec > h4 { margin: 0 0 10px; }
-    .hm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    .hm-field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;
+    .hm-overlay.open { display: flex; animation: hmFade 0.15s ease; }
+    .hm-box { background: var(--surface, #fff); color: var(--text-main, #111827);
+        border: 1px solid var(--border-color, #e5e7eb); border-radius: var(--radius-lg, 12px);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25); width: 100%; max-width: 860px;
+        max-height: 90vh; overflow-y: auto; animation: hmPop 0.2s ease; }
+    .hm-top { display: flex; justify-content: space-between; align-items: center;
+        padding: 20px 24px 12px; border-bottom: 1px solid var(--border-color, #e5e7eb);
+        position: sticky; top: 0; background: var(--surface, #fff); z-index: 2; }
+    .hm-top h3 { margin: 0; font-size: 18px; color: var(--text-main, #111827); }
+    .hm-x { background: none; border: 0; font-size: 26px; line-height: 1; cursor: pointer;
         color: var(--text-muted, #6b7280); }
-    .hm-field input, .hm-field select, .hm-field textarea { width: 100%; padding: 8px 10px;
-        border: 1px solid #d1d5db; border-radius: 8px; font: inherit; box-sizing: border-box;
-        background: #fff; color: inherit; }
-    .hm-field input[readonly], .hm-field textarea[readonly] { background: #f3f4f6; }
+    .hm-x:hover { color: var(--text-main, #111827); }
+    #hmLoading { padding: 24px; }
+    #hmBody { padding: 8px 24px 0; }
+    .hm-sec { padding: 16px 0; border-bottom: 1px dashed var(--border-color, #e5e7eb); }
+    .hm-sec > h4 { margin: 0 0 12px; font-size: 15px; color: var(--text-main, #111827); }
+    .hm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+    .hm-field { display: flex; flex-direction: column; gap: 8px; }
+    .hm-field label { font-size: 13px; font-weight: 600; color: var(--text-muted, #6b7280); }
+    .hm-field input, .hm-field select, .hm-field textarea { width: 100%; padding: 10px 14px;
+        border: 1px solid var(--border-color, #d1d5db); border-radius: var(--radius-md, 8px);
+        font: inherit; font-size: 14px; box-sizing: border-box; outline: none;
+        background: var(--surface, #fff); color: var(--text-main, #111827);
+        transition: border-color 0.2s ease; }
+    .hm-field input:focus, .hm-field select:focus, .hm-field textarea:focus {
+        border-color: var(--brand-purple, #9333ea); }
+    .hm-field input[readonly], .hm-field textarea[readonly] { background: var(--gradient-subtle, #f3f4f6); }
     .hm-full { grid-column: 1 / -1; }
     .hm-peso { display: flex; align-items: stretch; }
-    .hm-peso span { display: flex; align-items: center; padding: 0 12px; background: #f3f4f6;
-        border: 1px solid #d1d5db; border-right: 0; border-radius: 8px 0 0 8px; font-weight: 600; }
-    .hm-peso input { border-radius: 0 8px 8px 0; }
+    .hm-peso span { display: flex; align-items: center; padding: 0 14px;
+        background: var(--gradient-subtle, #f3f4f6); border: 1px solid var(--border-color, #d1d5db);
+        border-right: 0; border-radius: var(--radius-md, 8px) 0 0 var(--radius-md, 8px); font-weight: 600; }
+    .hm-peso input { border-radius: 0 var(--radius-md, 8px) var(--radius-md, 8px) 0; }
     .hm-teeth { display: flex; flex-wrap: wrap; gap: 8px; }
-    .hm-tooth { background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 10px; font-size: 13px; }
-    .hm-item { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
-    .hm-item-title { font-weight: 600; margin-bottom: 8px; font-size: 13px; }
-    .hm-empty { color: var(--text-muted, #6b7280); font-size: 13px; }
-    .hm-foot { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 22px; }
-    .hm-msg { margin-right: auto; font-size: 13px; }
-    .hm-btn { padding: 9px 18px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff;
-        cursor: pointer; font: inherit; font-weight: 600; }
-    .hm-btn.primary { background: var(--brand-purple, #9333ea); border-color: var(--brand-purple, #9333ea); color: #fff; }
-    .hm-btn:disabled { opacity: .6; cursor: not-allowed; }
-    @media (max-width: 640px) { .hm-grid { grid-template-columns: 1fr; } }
+    .hm-tooth { background: var(--gradient-subtle, #f3f4f6); border: 1px solid var(--border-color, #e5e7eb);
+        border-radius: var(--radius-md, 8px); padding: 8px 12px; font-size: 13px; font-weight: 600; }
+    .hm-item { border: 1px solid var(--border-color, #e5e7eb); border-radius: var(--radius-md, 8px);
+        padding: 16px; margin-bottom: 12px; }
+    .hm-item:last-child { margin-bottom: 0; }
+    .hm-sec:last-of-type { border-bottom: 0; }
+    .hm-item-title { font-weight: 700; margin-bottom: 12px; font-size: 14px; color: var(--text-main, #111827); }
+    .hm-empty { color: var(--text-muted, #6b7280); font-size: 13px; font-style: italic; }
+    .hm-foot { display: flex; justify-content: flex-end; align-items: center; gap: 12px;
+        padding: 16px 24px 20px; margin: 0 -24px; border-top: 1px solid var(--border-color, #e5e7eb);
+        position: sticky; bottom: 0; background: var(--surface, #fff); z-index: 2; }
+    .hm-msg { margin-right: auto; font-size: 13px; font-weight: 600; }
+    .hm-btn { padding: 10px 20px; border-radius: var(--radius-md, 8px); font: inherit; font-size: 14px;
+        font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+        background: var(--gradient-subtle, #f3f4f6); color: var(--text-main, #374151);
+        border: 1px solid var(--border-color, #d1d5db); transition: all 0.2s ease; }
+    .hm-btn.primary { background: var(--gradient-brand, #9333ea); color: #fff; border: none;
+        box-shadow: 0 4px 12px rgba(147, 51, 234, 0.25); }
+    .hm-btn.primary:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(147, 51, 234, 0.35); }
+    .hm-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+    .hm-sub { font-weight: 500; font-size: 12px; color: var(--text-muted, #6b7280); margin-left: 6px; }
+    .hm-bookbar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 16px; }
+    @keyframes hmFade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes hmPop { from { opacity: 0; transform: translateY(12px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); } }
+    @media (max-width: 768px) { .hm-grid { grid-template-columns: 1fr; } .hm-full { grid-column: auto; } }
 </style>
 
 <div class="hm-overlay" id="hmOverlay" aria-hidden="true">
@@ -397,7 +538,7 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
         <div id="hmLoading" class="hm-empty">Loading...</div>
 
         <div id="hmBody" style="display:none;">
-            <div class="hm-sec" style="margin-top:0;">
+            <div class="hm-sec">
                 <h4>Patient Information</h4>
                 <div class="hm-grid">
                     <div class="hm-field hm-full"><label>Full Name</label><input type="text" id="hmName" readonly></div>
@@ -415,11 +556,18 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
             </div>
 
             <div class="hm-sec">
-                <h4>Remaining Balance</h4>
-                <div class="hm-field" style="max-width:280px;">
-                    <div class="hm-peso">
-                        <span>&#8369;</span>
-                        <input type="number" id="hmBalance" min="0" step="0.01" placeholder="0.00">
+                <h4>Balance &amp; Sessions</h4>
+                <div class="hm-grid">
+                    <div class="hm-field">
+                        <label for="hmBalance">Remaining Balance</label>
+                        <div class="hm-peso">
+                            <span>&#8369;</span>
+                            <input type="number" id="hmBalance" min="0" step="0.01" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="hm-field">
+                        <label for="hmSessionsLeft">Remaining Sessions</label>
+                        <input type="number" id="hmSessionsLeft" min="0" step="1" placeholder="0">
                     </div>
                 </div>
             </div>
@@ -432,6 +580,23 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
             <div class="hm-sec">
                 <h4>Appointments</h4>
                 <div id="hmAppointments"></div>
+            </div>
+
+            <div class="hm-sec">
+                <h4>Book Next Appointment <span class="hm-sub" id="hmNextLabel"></span></h4>
+                <div class="hm-item">
+                    <div class="hm-grid">
+                        <div class="hm-field"><label for="hmBookDentist">Dentist</label><select id="hmBookDentist"></select></div>
+                        <div class="hm-field"><label for="hmBookDate">Date (next month only)</label><input type="date" id="hmBookDate"></div>
+                        <div class="hm-field"><label for="hmBookTime">Time</label><input type="time" id="hmBookTime"></div>
+                        <div class="hm-field"><label for="hmBookProc">Procedure</label><input type="text" id="hmBookProc" maxlength="150"></div>
+                        <div class="hm-field hm-full"><label for="hmBookReason">Reason / Notes</label><textarea id="hmBookReason" rows="2"></textarea></div>
+                    </div>
+                    <div class="hm-bookbar">
+                        <span class="hm-msg" id="hmBookMsg"></span>
+                        <button type="button" class="hm-btn primary" id="hmBook">Book Appointment</button>
+                    </div>
+                </div>
             </div>
 
             <div class="hm-foot">
@@ -496,6 +661,31 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
 
     var apptRows = [], sessRows = [];
 
+    function setBookMsg(text, ok) {
+        var m = $('hmBookMsg');
+        m.textContent = text || '';
+        m.style.color = ok ? '#15803d' : '#b91c1c';
+    }
+
+    function renderBookForm(data) {
+        var sel = $('hmBookDentist'); sel.innerHTML = '';
+        (data.dentists || []).forEach(function (d) {
+            var o = el('option', { value: d.dentist_id, text: d.full_name });
+            if (parseInt(d.dentist_id, 10) === parseInt(data.default_dentist, 10)) o.selected = true;
+            sel.appendChild(o);
+        });
+        var nm = data.next_month || {};
+        $('hmNextLabel').textContent = nm.label ? '(' + nm.label + ')' : '';
+        $('hmBookDate').min = nm.min || '';
+        $('hmBookDate').max = nm.max || '';
+        $('hmBookDate').value = '';
+        var a0 = (data.appointments || [])[0], s0 = (data.sessions || [])[0];
+        $('hmBookTime').value = a0 ? (a0.appointment_time || '').substring(0, 5) : '';
+        $('hmBookProc').value = (a0 && a0.procedure_name) || (s0 && s0.procedure_name) || '';
+        $('hmBookReason').value = '';
+        setBookMsg('');
+    }
+
     function render(data) {
         var p = data.patient;
         $('hmName').value = p.full_name || '';
@@ -505,6 +695,7 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
         $('hmEmail').value = p.email || '';
         $('hmAddress').value = p.address || '';
         $('hmBalance').value = parseFloat(p.remaining_balance || 0).toFixed(2);
+        $('hmSessionsLeft').value = parseInt(p.remaining_session || 0, 10) || 0;
 
         var teeth = $('hmTeeth'); teeth.innerHTML = '';
         if (!data.teeth.length) {
@@ -564,6 +755,40 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
         });
     }
 
+    function book() {
+        var btn = $('hmBook');
+        if (!$('hmBookDate').value || !$('hmBookTime').value || !$('hmBookProc').value.trim()) {
+            setBookMsg('Please fill in the dentist, date, time and procedure.', false);
+            return;
+        }
+        btn.disabled = true; setBookMsg('Booking...', true);
+
+        fetch('history.php?action=book', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                csrf: CSRF,
+                record_id: currentRecord,
+                dentist_id: $('hmBookDentist').value,
+                appointment_date: $('hmBookDate').value,
+                appointment_time: $('hmBookTime').value,
+                procedure_name: $('hmBookProc').value,
+                reason: $('hmBookReason').value
+            })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                setBookMsg(d.message || (d.ok ? 'Booked.' : 'Failed.'), d.ok);
+                if (d.ok) {
+                    $('hmBookDate').value = '';
+                    $('hmBookReason').value = '';
+                }
+            })
+            .catch(function () { setBookMsg('Network error. Please try again.', false); })
+            .then(function () { btn.disabled = false; });
+    }
+
     function load(id) {
         currentRecord = id;
         $('hmLoading').style.display = 'block';
@@ -577,6 +802,7 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
             .then(function (d) {
                 if (!d.ok) throw new Error(d.message || 'Failed to load.');
                 render(d);
+                renderBookForm(d);
                 $('hmLoading').style.display = 'none';
                 $('hmBody').style.display = 'block';
             })
@@ -591,6 +817,7 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
             csrf: CSRF,
             record_id: currentRecord,
             remaining_balance: $('hmBalance').value,
+            remaining_session: $('hmSessionsLeft').value,
             appointments: apptRows.map(function (r) {
                 return {
                     appointment_id: r.id,
@@ -632,6 +859,7 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
     $('hmClose').addEventListener('click', close);
     $('hmCancel').addEventListener('click', close);
     $('hmSave').addEventListener('click', save);
+    $('hmBook').addEventListener('click', book);
     overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
 })();

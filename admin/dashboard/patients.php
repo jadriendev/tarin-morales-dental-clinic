@@ -20,6 +20,7 @@ $stmtPatients = $pdo->query("
         p.contact_number,
         p.address,
         p.date_registered,
+        u.username,
         u.email,
         u.status AS user_status
     FROM tbl_patients p
@@ -44,6 +45,7 @@ $patients = $stmtPatients->fetchAll(PDO::FETCH_ASSOC);
             <thead>
                 <tr>
                     <th>ID</th>
+                    <th>Username</th>
                     <th>Full Name</th>
                     <th>Sex</th>
                     <th>Contact Number</th>
@@ -80,6 +82,14 @@ $patients = $stmtPatients->fetchAll(PDO::FETCH_ASSOC);
                             <td>
                                 <?php echo htmlspecialchars(
                                     (string)$p['patient_id'],
+                                    ENT_QUOTES,
+                                    'UTF-8'
+                                ); ?>
+                            </td>
+
+                            <td>
+                                <?php echo htmlspecialchars(
+                                    ($p['username'] ?? '') !== '' ? $p['username'] : 'N/A',
                                     ENT_QUOTES,
                                     'UTF-8'
                                 ); ?>
@@ -147,7 +157,7 @@ $patients = $stmtPatients->fetchAll(PDO::FETCH_ASSOC);
 
                     <tr>
                         <td
-                            colspan="7"
+                            colspan="8"
                             style="text-align: center; color: var(--text-muted);"
                         >
                             No patients found.
