@@ -40,9 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $error_message = "Please fill in all required fields (Username, First Name, Last Name, License No., and Password).";
 
-    } elseif (strlen($password) < 6) {
+    } elseif (strlen($password) < 8) {
 
-        $error_message = "Password must be at least 6 characters long.";
+        $error_message = "Password must be at least 8 characters long.";
 
     } elseif (!in_array($status, $allowed_statuses, true)) {
 
@@ -438,8 +438,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           id="password"
           name="password"
           required
-          minlength="6"
-          placeholder="Minimum 6 characters"
+          minlength="8"
+          placeholder="Minimum 8 characters"
         >
       </div>
 
@@ -609,11 +609,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       el.textContent = emptyText || '—';
       el.classList.add('is-empty');
     } else {
-<<<<<<< HEAD
-      el.textContent = value; // textContent = safe from HTML injection
-=======
       el.textContent = value;
->>>>>>> admin
       el.classList.remove('is-empty');
     }
   }

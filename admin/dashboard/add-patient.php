@@ -79,9 +79,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $error_message = "Please enter a valid email address.";
 
-        } elseif (strlen($password) < 6) {
+        } elseif (strlen($password) < 8) {
 
-            $error_message = "Password must be at least 6 characters long.";
+            $error_message = "Password must be at least 8 characters long.";
 
         } elseif (strlen($contact_number) > 20) {
 
@@ -154,7 +154,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             birth_date,
                             sex,
                             contact_number,
-                            address
+                            address,
+                            remaining_balance,
+                            remaining_session
                         )
                         VALUES (
                             :user_id,
@@ -164,7 +166,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             :birth_date,
                             :sex,
                             :contact_number,
-                            :address
+                            :address,
+                            '0',
+                            '0'
                         )
                     ");
 
@@ -652,8 +656,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           id="password"
           name="password"
           required
-          minlength="6"
-          placeholder="Minimum 6 characters"
+          minlength="8"
+          placeholder="Minimum 8 characters"
         >
       </div>
 

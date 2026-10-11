@@ -85,6 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
         $contact_number = trim($_POST['contact_number'] ?? '');
         $address = trim($_POST['address'] ?? '');
         $email = trim($_POST['email'] ?? '');
+        $username = trim($_POST['username'] ?? '');
         $account_status = trim($_POST['account_status'] ?? 'active');
 
         if (
@@ -94,7 +95,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
             $sex === '' ||
             $contact_number === '' ||
             $address === '' ||
-            $email === ''
+            $email === '' ||
+            $username === ''
         ) {
 
             $error_message = "Please fill in all required fields.";
@@ -122,6 +124,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 
             $error_message = "Please enter a valid email address.";
+
+        } elseif (strlen($username) > 55) {
+
+            $error_message = "Username must not exceed 55 characters.";
+
+        } elseif (!preg_match('/^[A-Za-z0-9._-]+$/', $username)) {
+
+            $error_message = "Username may only contain letters, numbers, dots, underscores and hyphens.";
 
         } elseif (!in_array($account_status, ['active', 'inactive'], true)) {
 
@@ -170,9 +180,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
                         ':user_id' => $patient['user_id']
                     ]);
 
+                    $stmtCheckUser = $pdo->prepare("
+                        SELECT user_id
+                        FROM tbl_users
+                        WHERE username = :username
+                        AND user_id != :user_id
+                        LIMIT 1
+                    ");
+
+                    $stmtCheckUser->execute([
+                        ':username' => $username,
+                        ':user_id' => $patient['user_id']
+                    ]);
+
                     if ($stmtCheck->fetch()) {
 
                         $error_message = "The email address is already in use by another account.";
+
+                    } elseif ($stmtCheckUser->fetch()) {
+
+                        $error_message = "The username is already in use by another account.";
 
                     } else {
 
@@ -182,12 +209,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
                             UPDATE tbl_users
                             SET
                                 email = :email,
+                                username = :username,
                                 status = :status
                             WHERE user_id = :user_id
                         ");
 
                         $stmtUser->execute([
                             ':email' => $email,
+                            ':username' => $username,
                             ':status' => $account_status,
                             ':user_id' => $patient['user_id']
                         ]);
@@ -230,6 +259,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
                         $patient['contact_number'] = $contact_number;
                         $patient['address'] = $address;
                         $patient['email'] = $email;
+                        $patient['username'] = $username;
                         $patient['account_status'] = $account_status;
                     }
 
@@ -757,7 +787,32 @@ include __DIR__ . '/includes/header.php';
 
         </div>
 
-        <div class="form-group full-width">
+        <div class="form-group">
+
+          <label for="username">
+            Username *
+          </label>
+
+          <input
+            type="text"
+            id="username"
+            name="username"
+            value="<?php
+            echo htmlspecialchars(
+                $patient['username'] ?? '',
+                ENT_QUOTES,
+                'UTF-8'
+            );
+            ?>"
+            maxlength="55"
+            pattern="[A-Za-z0-9._\-]+"
+            title="Letters, numbers, dots, underscores and hyphens only"
+            required
+          >
+
+        </div>
+
+        <div class="form-group">
 
           <label for="account_status">
             Account Status
@@ -870,6 +925,10 @@ include __DIR__ . '/includes/header.php';
             <span class="confirm-value" id="cfEmail"></span>
           </div>
           <div class="confirm-row">
+            <span class="confirm-label">Username</span>
+            <span class="confirm-value" id="cfUsername"></span>
+          </div>
+          <div class="confirm-row">
             <span class="confirm-label">Account Status</span>
             <span class="confirm-value" id="cfStatus"></span>
           </div>
@@ -956,6 +1015,7 @@ include __DIR__ . '/includes/header.php';
         setValue('cfSex',     form.sex.value);
         setValue('cfContact', form.contact_number.value);
         setValue('cfEmail',   form.email.value);
+        setValue('cfUsername', form.username.value);
         setValue('cfAddress', form.address.value);
 
         renderStatus();
