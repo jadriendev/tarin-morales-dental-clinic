@@ -22,7 +22,7 @@ if (empty($_SESSION['csrf_token'])) {
 $csrfToken = $_SESSION['csrf_token'];
 
 $maxAttempts    = 5;
-$lockoutSeconds = 300;
+$lockoutSeconds = 1800;
 
 if (!isset($_SESSION['login_attempts'])) {
     $_SESSION['login_attempts'] = 0;
