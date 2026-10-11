@@ -79,9 +79,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $error_message = "Please enter a valid email address.";
 
-        } elseif (strlen($password) < 8) {
+        } elseif (strlen($password) < 6) {
 
-            $error_message = "Password must be at least 8 characters long.";
+            $error_message = "Password must be at least 6 characters long.";
 
         } elseif (strlen($contact_number) > 20) {
 
@@ -656,8 +656,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           id="password"
           name="password"
           required
-          minlength="8"
-          placeholder="Minimum 8 characters"
+          minlength="6"
+          placeholder="Minimum 6 characters"
         >
       </div>
 

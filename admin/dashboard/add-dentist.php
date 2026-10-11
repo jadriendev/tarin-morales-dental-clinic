@@ -40,9 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $error_message = "Please fill in all required fields (Username, First Name, Last Name, License No., and Password).";
 
-    } elseif (strlen($password) < 8) {
+    } elseif (strlen($password) < 6) {
 
-        $error_message = "Password must be at least 8 characters long.";
+        $error_message = "Password must be at least 6 characters long.";
 
     } elseif (!in_array($status, $allowed_statuses, true)) {
 
@@ -438,8 +438,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           id="password"
           name="password"
           required
-          minlength="8"
-          placeholder="Minimum 8 characters"
+          minlength="6"
+          placeholder="Minimum 6 characters"
         >
       </div>
 

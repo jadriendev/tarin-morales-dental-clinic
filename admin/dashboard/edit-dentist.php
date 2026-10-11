@@ -150,9 +150,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $dentist) {
 
                 } else {
 
-                    if ($password !== '' && strlen($password) < 8) {
+                    if ($password !== '' && strlen($password) < 6) {
 
-                        $error_message = "Password must be at least 8 characters long.";
+                        $error_message = "Password must be at least 6 characters long.";
 
                     } else {
 
@@ -721,7 +721,7 @@ include __DIR__ . '/includes/header.php';
             type="password"
             id="password"
             name="password"
-            minlength="8"
+            minlength="6"
             placeholder="Leave blank to keep current password"
           >
 
