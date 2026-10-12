@@ -2,6 +2,7 @@
 require_once 'config.php';
 session_start();
 
+$dentist_id = filter_var($_SESSION['dentist_id'] ?? null, FILTER_VALIDATE_INT) ?: 0;
 $patient_id = filter_input(INPUT_GET, 'patient_id', FILTER_VALIDATE_INT) ?: 0;
 $appointment_id = filter_input(INPUT_GET, 'appointment_id', FILTER_VALIDATE_INT) ?: 0;
 $appointment = null;
@@ -14,10 +15,10 @@ $appointment_sql = "SELECT a.appointment_id, a.patient_id, a.dentist_id, a.proce
         CONCAT_WS(' ', p.first_name, NULLIF(p.middle_name, ''), p.last_name) AS patient_name
     FROM tbl_appointments a
     INNER JOIN tbl_patients p ON p.patient_id = a.patient_id
-    WHERE a.appointment_id = ? AND a.patient_id = ? LIMIT 1";
+    WHERE a.appointment_id = ? AND a.patient_id = ? AND a.dentist_id = ? LIMIT 1";
 $appointment_stmt = mysqli_prepare($link, $appointment_sql);
 if ($appointment_stmt) {
-    mysqli_stmt_bind_param($appointment_stmt, 'ii', $appointment_id, $patient_id);
+    mysqli_stmt_bind_param($appointment_stmt, 'iii', $appointment_id, $patient_id, $dentist_id);
     mysqli_stmt_execute($appointment_stmt);
     $appointment_result = mysqli_stmt_get_result($appointment_stmt);
     $appointment = mysqli_fetch_assoc($appointment_result) ?: null;
@@ -37,7 +38,7 @@ if ($appointment) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $notes = trim($_POST['notes'] ?? '');
         $prescription = trim($_POST['prescription'] ?? '');
-        $dentist_id = (int) $appointment['dentist_id'];
+        $appointment_dentist_id = (int) $appointment['dentist_id'];
 
         if ($treatment) {
             $save_sql = 'UPDATE tbl_treatments SET treatment_notes = ?, prescription = ?, updated_at = NOW() WHERE treatment_id = ?';
@@ -50,7 +51,7 @@ if ($appointment) {
                 VALUES (?, ?, ?, ?, ?, 'in_progress', NOW())";
             $save_stmt = mysqli_prepare($link, $save_sql);
             if ($save_stmt) {
-                mysqli_stmt_bind_param($save_stmt, 'iisss', $appointment_id, $dentist_id, $appointment['procedure_name'], $notes, $prescription);
+                mysqli_stmt_bind_param($save_stmt, 'iisss', $appointment_id, $appointment_dentist_id, $appointment['procedure_name'], $notes, $prescription);
             }
         }
 
