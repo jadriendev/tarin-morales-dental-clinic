@@ -2,6 +2,7 @@
 require_once 'config.php';
 session_start();
 
+$dentist_id = filter_var($_SESSION['dentist_id'] ?? null, FILTER_VALIDATE_INT) ?: 0;
 $today = date('Y-m-d');
 $search_term = trim($_GET['txtsearch'] ?? '');
 $today_appointments = 0;
@@ -14,10 +15,11 @@ $stats_sql = "SELECT
         SUM(LOWER(status) = 'completed') AS completed,
         SUM(LOWER(status) IN ('pending', 'confirmed', 'for_dentist', 'in_progress')) AS pending
     FROM tbl_appointments
-    WHERE appointment_date = ?";
+    WHERE appointment_date = ?
+        AND dentist_id = ?";
 $stats_stmt = mysqli_prepare($link, $stats_sql);
 if ($stats_stmt) {
-    mysqli_stmt_bind_param($stats_stmt, 's', $today);
+    mysqli_stmt_bind_param($stats_stmt, 'si', $today, $dentist_id);
     mysqli_stmt_execute($stats_stmt);
     $stats_result = mysqli_stmt_get_result($stats_stmt);
     if ($stats = mysqli_fetch_assoc($stats_result)) {
@@ -37,13 +39,14 @@ $appointments_sql = "SELECT a.appointment_id, a.patient_id, a.appointment_date, 
     FROM tbl_appointments a
     INNER JOIN tbl_patients p ON p.patient_id = a.patient_id
     WHERE a.appointment_date = ?
+        AND a.dentist_id = ?
         AND LOWER(a.status) <> 'completed'
         AND (? = '' OR CONCAT_WS(' ', p.first_name, NULLIF(p.middle_name, ''), p.last_name) LIKE ?)
     ORDER BY a.appointment_time ASC";
 $appointments_stmt = mysqli_prepare($link, $appointments_sql);
 if ($appointments_stmt) {
     $search_like = '%' . $search_term . '%';
-    mysqli_stmt_bind_param($appointments_stmt, 'sss', $today, $search_term, $search_like);
+    mysqli_stmt_bind_param($appointments_stmt, 'siss', $today, $dentist_id, $search_term, $search_like);
     mysqli_stmt_execute($appointments_stmt);
     $appointments_result = mysqli_stmt_get_result($appointments_stmt);
     while ($appointment = mysqli_fetch_assoc($appointments_result)) {
