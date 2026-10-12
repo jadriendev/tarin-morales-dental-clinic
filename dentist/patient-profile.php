@@ -42,12 +42,12 @@ if ($patient && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['finish_se
 
             $appointment_stmt = mysqli_prepare($link, "SELECT appointment_id, patient_id, dentist_id, procedure_name, reason, status
                 FROM tbl_appointments
-                WHERE appointment_id = ? AND patient_id = ?
+                WHERE appointment_id = ? AND patient_id = ? AND dentist_id = ?
                 LIMIT 1 FOR UPDATE");
             if (!$appointment_stmt) {
                 throw new RuntimeException('Could not load the appointment.');
             }
-            mysqli_stmt_bind_param($appointment_stmt, 'ii', $posted_appointment_id, $patient_id);
+            mysqli_stmt_bind_param($appointment_stmt, 'iii', $posted_appointment_id, $patient_id, $dentist_id);
             mysqli_stmt_execute($appointment_stmt);
             $appointment_result = mysqli_stmt_get_result($appointment_stmt);
             $appointment_to_finish = mysqli_fetch_assoc($appointment_result) ?: null;
@@ -126,11 +126,11 @@ if ($patient && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['finish_se
                 mysqli_stmt_close($insert_record_stmt);
             }
 
-            $complete_appointment_stmt = mysqli_prepare($link, "UPDATE tbl_appointments SET status = 'completed', updated_at = NOW() WHERE appointment_id = ?");
+            $complete_appointment_stmt = mysqli_prepare($link, "UPDATE tbl_appointments SET status = 'completed', updated_at = NOW() WHERE appointment_id = ? AND dentist_id = ?");
             if (!$complete_appointment_stmt) {
                 throw new RuntimeException('Could not update the appointment status.');
             }
-            mysqli_stmt_bind_param($complete_appointment_stmt, 'i', $posted_appointment_id);
+            mysqli_stmt_bind_param($complete_appointment_stmt, 'ii', $posted_appointment_id, $dentist_id);
             mysqli_stmt_execute($complete_appointment_stmt);
             mysqli_stmt_close($complete_appointment_stmt);
 
@@ -153,13 +153,13 @@ if ($patient) {
     $selected_sql = "SELECT appointment_id, dentist_id, appointment_date, appointment_time, procedure_name,
             reason, status AS appointment_status
         FROM tbl_appointments
-        WHERE patient_id = ? AND (? = 0 OR appointment_id = ?)
+        WHERE patient_id = ? AND dentist_id = ? AND (? = 0 OR appointment_id = ?)
         ORDER BY CASE WHEN status IN ('pending', 'confirmed', 'for_dentist', 'in_progress') THEN 0 ELSE 1 END,
             appointment_date DESC, appointment_time DESC
         LIMIT 1";
     $selected_stmt = mysqli_prepare($link, $selected_sql);
     if ($selected_stmt) {
-        mysqli_stmt_bind_param($selected_stmt, 'iii', $patient_id, $selected_appointment_id, $selected_appointment_id);
+        mysqli_stmt_bind_param($selected_stmt, 'iiii', $patient_id, $dentist_id, $selected_appointment_id, $selected_appointment_id);
         mysqli_stmt_execute($selected_stmt);
         $selected_result = mysqli_stmt_get_result($selected_stmt);
         $selected_appointment = mysqli_fetch_assoc($selected_result) ?: null;
@@ -335,14 +335,7 @@ $can_finish_session = $selected_appointment
                             <p class="text-sm text-slate-600 mt-2"><?= htmlspecialchars($selected_appointment['reason'] ?: 'No visit reason recorded.', ENT_QUOTES, 'UTF-8') ?></p>
                             <p class="text-xs text-slate-400 mt-2"><?= htmlspecialchars(date('M j, Y', strtotime($selected_appointment['appointment_date'])), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars(ucfirst(str_replace('_', ' ', $selected_appointment['appointment_status'])), ENT_QUOTES, 'UTF-8') ?></p>
                             <?php if ($can_finish_session): ?>
-                                <div class="flex flex-wrap gap-3 mt-5">
-                                    <a href="add-prescription.php?patient_id=<?= (int) $patient_id ?>&amp;appointment_id=<?= (int) $selected_appointment_id ?>" class="inline-flex items-center justify-center gap-2 px-4 py-2 btn-gradient text-white text-sm font-medium rounded-xl shadow-sm hover:shadow-md transition"><i class="fa-solid fa-prescription"></i> Add Prescription</a>
-                                    <form method="POST" onsubmit="return confirm('Finish this session and add it to the admin patient history?');">
-                                        <input type="hidden" name="finish_session_token" value="<?= htmlspecialchars($_SESSION['finish_session_token'], ENT_QUOTES, 'UTF-8') ?>">
-                                        <input type="hidden" name="appointment_id" value="<?= (int) $selected_appointment_id ?>">
-                                        <button type="submit" name="finish_session" value="1" class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl shadow-sm hover:bg-green-700 transition"><i class="fa-solid fa-check"></i> Finish Session</button>
-                                    </form>
-                                </div>
+                                <a href="add-prescription.php?patient_id=<?= (int) $patient_id ?>&amp;appointment_id=<?= (int) $selected_appointment_id ?>" class="inline-flex items-center justify-center gap-2 px-4 py-2 btn-gradient text-white text-sm font-medium rounded-xl shadow-sm hover:shadow-md transition mt-5"><i class="fa-solid fa-prescription"></i> Add Prescription</a>
                             <?php endif; ?>
                         <?php else: ?>
                             <span class="font-medium text-slate-500 mt-1">No appointment or procedure recorded yet.</span>
@@ -351,7 +344,16 @@ $can_finish_session = $selected_appointment
                 </div>
             </div>
 
-            <div class="flex gap-3 mt-8"><a href="patients.php" class="flex items-center gap-2 px-6 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition"><i class="fa-solid fa-arrow-left"></i> Back to Patients</a></div>
+            <div class="flex flex-wrap gap-3 mt-8">
+                <a href="patients.php" class="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition"><i class="fa-solid fa-arrow-left"></i> Back to Patients</a>
+                <?php if ($can_finish_session): ?>
+                    <form method="POST" onsubmit="return confirm('Finish this session and add it to the admin patient history?');">
+                        <input type="hidden" name="finish_session_token" value="<?= htmlspecialchars($_SESSION['finish_session_token'], ENT_QUOTES, 'UTF-8') ?>">
+                        <input type="hidden" name="appointment_id" value="<?= (int) $selected_appointment_id ?>">
+                        <button type="submit" name="finish_session" value="1" class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white text-sm font-semibold rounded-xl shadow-sm hover:bg-green-700 transition"><i class="fa-solid fa-check"></i> Finish Session</button>
+                    </form>
+                <?php endif; ?>
+            </div>
             <?php endif; ?>
 
         </div>

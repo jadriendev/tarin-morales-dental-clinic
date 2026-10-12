@@ -154,7 +154,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             birth_date,
                             sex,
                             contact_number,
-                            address
+                            address,
+                            remaining_balance,
+                            remaining_session
                         )
                         VALUES (
                             :user_id,
@@ -164,7 +166,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             :birth_date,
                             :sex,
                             :contact_number,
-                            :address
+                            :address,
+                            '0',
+                            '0'
                         )
                     ");
 

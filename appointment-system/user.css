@@ -551,3 +551,77 @@ a {
         font-size: 20px;
     }
 }
+
+.appointment-list {
+    max-height: 60vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding-right: 4px;
+}
+
+.appointment-item {
+    flex-shrink: 0;
+    margin: 10px 0;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--background);
+}
+
+.appointment-item-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.appointment-item-head strong {
+    font-size: 13px;
+}
+
+.appointment-item .information {
+    gap: 0;
+    margin-top: 6px;
+}
+
+.appointment-item .information div:last-child {
+    border-bottom: none;
+}
+
+.appointment-status.status-completed {
+    background: #edf9f2;
+    color: #25854d;
+}
+
+.appointment-status.status-cancelled,
+.appointment-status.status-no_show {
+    background: #fdeeee;
+    color: #c0392b;
+}
+
+.status-warning {
+    width: fit-content;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 9px;
+    margin-bottom: 7px;
+    border-radius: 6px;
+    background: #fff4e5;
+    color: #b45f06;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.status-warning span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #f39c12;
+}
+
+.warning-text {
+    color: #b45f06 !important;
+}

@@ -92,6 +92,13 @@ try {
   </div>
 <?php endif; ?>
 
+<?php if (($_GET['msg'] ?? '') === 'added'): ?>
+  <div style="background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:600;margin-bottom:20px;">
+    <i class="fa-solid fa-circle-check"></i>
+    Dentist added successfully.
+  </div>
+<?php endif; ?>
+
 <div class="card">
 
   <div class="head">

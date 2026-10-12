@@ -609,11 +609,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       el.textContent = emptyText || '—';
       el.classList.add('is-empty');
     } else {
-<<<<<<< HEAD
-      el.textContent = value; // textContent = safe from HTML injection
-=======
       el.textContent = value;
->>>>>>> admin
       el.classList.remove('is-empty');
     }
   }

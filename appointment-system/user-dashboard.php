@@ -17,7 +17,6 @@ $stmt = $pdo->prepare("
     WHERE user_id = :user_id
     LIMIT 1
 ");
-
 $stmt->execute(['user_id' => $userId]);
 $patient = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$patient) {
@@ -25,6 +24,7 @@ if (!$patient) {
     exit();
 }
 
+<<<<<<< HEAD
 $appointmentStmt = $pdo->prepare("
     SELECT appointment_date, appointment_time, procedure_name, status
     FROM tbl_appointments
@@ -37,16 +37,59 @@ $appointmentStmt = $pdo->prepare("
     ORDER BY appointment_date ASC, appointment_time ASC
     LIMIT 1
 ");
+=======
+$remainingBalance  = (float) ($patient['remaining_balance'] ?? 0);
+$remainingSessions = (int) ($patient['remaining_session'] ?? 0);
+>>>>>>> deployment
 
+$sessionStmt = $pdo->prepare("SELECT COUNT(*) FROM tbl_dental_records WHERE patient_id = :patient_id");
+$sessionStmt->execute(['patient_id' => $patient['patient_id']]);
+$completedSessions = (int) $sessionStmt->fetchColumn();
+
+$appointmentStmt = $pdo->prepare("
+    SELECT a.appointment_id, a.appointment_date, a.appointment_time, a.procedure_name,
+           a.reason, a.status, d.first_name AS dentist_first, d.last_name AS dentist_last
+    FROM tbl_appointments a
+    LEFT JOIN tbl_dentists d ON d.dentist_id = a.dentist_id
+    WHERE a.patient_id = :patient_id
+      AND a.appointment_date >= CURDATE()
+      AND a.status IN ('pending', 'confirmed', 'for_dentist', 'in_progress')
+    ORDER BY a.appointment_date ASC, a.appointment_time ASC
+");
 $appointmentStmt->execute(['patient_id' => $patient['patient_id']]);
-$nextAppointment = $appointmentStmt->fetch(PDO::FETCH_ASSOC);
+$upcomingAppointments = $appointmentStmt->fetchAll(PDO::FETCH_ASSOC);
+$nextAppointment = $upcomingAppointments[0] ?? null;
+$moreAppointments = max(0, count($upcomingAppointments) - 1);
+
+function statusLabel($status)
+{
+    return ucfirst(str_replace('_', ' ', (string) $status));
+}
+
+$historyStmt = $pdo->prepare("
+    SELECT a.appointment_date, a.appointment_time, a.procedure_name,
+           a.reason, a.status, d.first_name AS dentist_first, d.last_name AS dentist_last
+    FROM tbl_appointments a
+    LEFT JOIN tbl_dentists d ON d.dentist_id = a.dentist_id
+    WHERE a.patient_id = :patient_id
+      AND (a.appointment_date < CURDATE() OR a.status IN ('completed', 'cancelled', 'no_show'))
+    ORDER BY a.appointment_date DESC, a.appointment_time DESC
+");
+$historyStmt->execute(['patient_id' => $patient['patient_id']]);
+$appointmentHistory = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
+$historyCount = count($appointmentHistory);
+$completedCount = 0;
+foreach ($appointmentHistory as $past) {
+    if ($past['status'] === 'completed') {
+        $completedCount++;
+    }
+}
 
 $teethStmt = $pdo->prepare("
     SELECT tooth_condition
     FROM tbl_patient_teeth
     WHERE patient_id = :patient_id
 ");
-
 $teethStmt->execute(['patient_id' => $patient['patient_id']]);
 $teethRecords = $teethStmt->fetchAll(PDO::FETCH_ASSOC);
 $teethConcernCount = 0;
@@ -55,6 +98,7 @@ foreach ($teethRecords as $tooth) {
         $teethConcernCount++;
     }
 }
+<<<<<<< HEAD
 
 $teethStatus = $teethConcernCount > 0 ? 'Needs Attention' : 'Good';
 $fullName = trim($patient['first_name'] . ' ' . ($patient['middle_name'] ? $patient['middle_name'] . ' ' : '') . $patient['last_name']);
@@ -62,8 +106,20 @@ $displayName = $patient['first_name'];
 $remainingBalance = (float)($patient['remaining_balance'] ?? 0);
 $remainingSessions = $patient['remaining_session'] ?? '0';
 $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
-?>
+=======
+$teethStatus      = $teethConcernCount > 0 ? 'Needs Attention' : 'Good';
+$teethStatusClass = $teethConcernCount > 0 ? 'status-warning' : 'status-good';
 
+$fullName = trim(
+    $patient['first_name'] . ' ' .
+    ($patient['middle_name'] ? $patient['middle_name'] . ' ' : '') .
+    $patient['last_name']
+);
+$displayName = $patient['first_name'];
+$patientId   = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
+$email       = $_SESSION['email'] ?? '';
+>>>>>>> deployment
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -75,7 +131,85 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
     <link rel="shortcut icon" href="../images/logo.jpg" type="image/x-icon">
+<<<<<<< HEAD
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+=======
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer">
+    <style>
+    .appointment-list {
+        max-height: 60vh;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        padding-right: 4px;
+    }
+
+    .appointment-item {
+        flex-shrink: 0;
+        margin: 16px 0;
+    }
+
+    .appointment-item-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .appointment-item-head strong {
+        font-size: 13px;
+    }
+
+    .appointment-item .information {
+        gap: 0;
+        margin-top: 6px;
+    }
+
+    .appointment-item .information div:last-child {
+        border-bottom: none;
+    }
+
+    .appointment-status.status-completed {
+        background: #edf9f2;
+        color: #25854d;
+    }
+
+    .appointment-status.status-cancelled,
+    .appointment-status.status-no_show {
+        background: #fdeeee;
+        color: #c0392b;
+    }
+
+    .status-warning {
+        width: fit-content;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 9px;
+        margin-bottom: 7px;
+        border-radius: 6px;
+        background: #fff4e5;
+        color: #b45f06;
+        font-size: 10px;
+        font-weight: 800;
+    }
+
+    .status-warning span {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #f39c12;
+    }
+
+    .warning-text {
+        color: #b45f06 !important;
+    }
+    </style>
+>>>>>>> deployment
 </head>
 <body>
 <header class="navbar">
@@ -119,10 +253,12 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
                 <i class="fa-solid fa-tooth"></i>
             </div>
         </section>
+
         <div class="section-title">
             <h2>Your Information</h2>
             <p>View your dental and account information.</p>
         </div>
+
         <section class="dashboard-grid">
             <div class="dashboard-card" onclick="openModal('personalModal')">
                 <div class="card-top">
@@ -138,6 +274,7 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
                     <i class="fa-solid fa-arrow-right"></i>
                 </div>
             </div>
+
             <div class="dashboard-card" onclick="openModal('teethModal')">
                 <div class="card-top">
                     <div class="card-icon teeth">
@@ -146,7 +283,7 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
                     <i class="fa-solid fa-arrow-up-right-from-square card-arrow"></i>
                 </div>
                 <h3>Teeth Condition Status</h3>
-                <div class="status-good">
+                <div class="<?php echo $teethStatusClass; ?>">
                     <span></span>
                     <?php echo htmlspecialchars($teethStatus); ?>
                 </div>
@@ -156,6 +293,7 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
                     <i class="fa-solid fa-arrow-right"></i>
                 </div>
             </div>
+
             <div class="dashboard-card" onclick="openModal('balanceModal')">
                 <div class="card-top">
                     <div class="card-icon balance">
@@ -164,13 +302,20 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
                     <i class="fa-solid fa-arrow-up-right-from-square card-arrow"></i>
                 </div>
                 <h3>Remaining Balance</h3>
+<<<<<<< HEAD
                 <strong class="card-number">₱ <?php echo number_format($remainingBalance, 2); ?></strong>
+=======
+                <strong class="card-number">
+                    ₱ <?php echo number_format($remainingBalance, 2); ?>
+                </strong>
+>>>>>>> deployment
                 <p>Outstanding balance.</p>
                 <div class="card-footer">
                     <span>View balance</span>
                     <i class="fa-solid fa-arrow-right"></i>
                 </div>
             </div>
+
             <div class="dashboard-card" onclick="openModal('sessionsModal')">
                 <div class="card-top">
                     <div class="card-icon sessions">
@@ -179,19 +324,35 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
                     <i class="fa-solid fa-arrow-up-right-from-square card-arrow"></i>
                 </div>
                 <h3>Remaining Sessions</h3>
+<<<<<<< HEAD
                 <strong class="card-number"><?php echo $remainingSessions; ?> Sessions</strong>
+=======
+                <strong class="card-number">
+                    <?php echo $remainingSessions; ?>
+                    <?php echo $remainingSessions === 1 ? 'Session' : 'Sessions'; ?>
+                </strong>
+>>>>>>> deployment
                 <p>Sessions left to complete.</p>
                 <div class="card-footer">
-                    <span>View history</span>
+                    <span>View sessions</span>
                     <i class="fa-solid fa-arrow-right"></i>
                 </div>
             </div>
+
             <div class="dashboard-card" onclick="openModal('appointmentModal')">
                 <div class="card-top">
                     <div class="card-icon appointment">
                         <i class="fa-regular fa-calendar-days"></i>
                     </div>
+<<<<<<< HEAD
                     <span class="appointment-status"><?php echo $nextAppointment ? 'Scheduled' : 'No appointment'; ?></span>
+=======
+                    <span class="appointment-status">
+                        <?php echo $nextAppointment
+                            ? htmlspecialchars(statusLabel($nextAppointment['status']))
+                            : 'No appointment'; ?>
+                    </span>
+>>>>>>> deployment
                 </div>
                 <h3>Next Appointment</h3>
                 <?php if ($nextAppointment): ?>
@@ -200,7 +361,15 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
                     </strong>
                     <p>
                         <?php echo date('h:i A', strtotime($nextAppointment['appointment_time'])); ?>
+<<<<<<< HEAD
                         - <?php echo htmlspecialchars($nextAppointment['procedure_name']); ?>
+=======
+                        -
+                        <?php echo htmlspecialchars($nextAppointment['procedure_name']); ?>
+                        <?php if ($moreAppointments > 0): ?>
+                            <br>+<?php echo $moreAppointments; ?> more upcoming
+                        <?php endif; ?>
+>>>>>>> deployment
                     </p>
                 <?php else: ?>
                     <strong class="appointment-empty">No upcoming appointment</strong>
@@ -211,9 +380,28 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
                     <i class="fa-solid fa-arrow-right"></i>
                 </div>
             </div>
+            <div class="dashboard-card" onclick="openModal('historyModal')">
+                <div class="card-top">
+                    <div class="card-icon history">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                    </div>
+                    <i class="fa-solid fa-arrow-up-right-from-square card-arrow"></i>
+                </div>
+                <h3>Appointment History</h3>
+                <strong class="card-number">
+                    <?php echo $historyCount; ?>
+                    <?php echo $historyCount === 1 ? 'Record' : 'Records'; ?>
+                </strong>
+                <p><?php echo $completedCount; ?> completed appointment<?php echo $completedCount === 1 ? '' : 's'; ?>.</p>
+                <div class="card-footer">
+                    <span>View history</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </div>
+            </div>
         </section>
     </div>
 </main>
+
 <div class="modal" id="personalModal">
     <div class="modal-box">
         <button class="close-button" onclick="closeModal('personalModal')">&times;</button>
@@ -248,7 +436,11 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
             </div>
             <div>
                 <span>Email</span>
+<<<<<<< HEAD
                 <strong><?php echo htmlspecialchars($_SESSION['email'] ?? ''); ?></strong>
+=======
+                <strong><?php echo htmlspecialchars($email); ?></strong>
+>>>>>>> deployment
             </div>
             <div>
                 <span>Date Registered</span>
@@ -258,6 +450,7 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
         <a href="profile/profile.php" class="modal-button">View Full Profile</a>
     </div>
 </div>
+
 <div class="modal" id="teethModal">
     <div class="modal-box">
         <button class="close-button" onclick="closeModal('teethModal')">&times;</button>
@@ -268,7 +461,13 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
         <div class="information">
             <div>
                 <span>Current Status</span>
+<<<<<<< HEAD
                 <strong class="good-text"><?php echo htmlspecialchars($teethStatus); ?></strong>
+=======
+                <strong class="<?php echo $teethConcernCount > 0 ? 'warning-text' : 'good-text'; ?>">
+                    <?php echo htmlspecialchars($teethStatus); ?>
+                </strong>
+>>>>>>> deployment
             </div>
             <div>
                 <span>Teeth with concerns</span>
@@ -277,12 +476,14 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
         </div>
     </div>
 </div>
+
 <div class="modal" id="appointmentModal">
     <div class="modal-box">
         <button class="close-button" onclick="closeModal('appointmentModal')">&times;</button>
         <div class="modal-icon appointment">
             <i class="fa-regular fa-calendar-days"></i>
         </div>
+<<<<<<< HEAD
         <h2>Next Appointment</h2>
         <?php if ($nextAppointment): ?>
             <div class="information">
@@ -302,6 +503,41 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
                     <span>Status</span>
                     <strong><?php echo htmlspecialchars(ucfirst($nextAppointment['status'])); ?></strong>
                 </div>
+=======
+        <h2>Upcoming Appointments</h2>
+        <?php if ($upcomingAppointments): ?>
+            <div class="appointment-list">
+                <?php foreach ($upcomingAppointments as $appt): ?>
+                    <div class="appointment-item">
+                        <div class="appointment-item-head">
+                            <strong><?php echo date('M d, Y', strtotime($appt['appointment_date'])); ?></strong>
+                            <span class="appointment-status"><?php echo htmlspecialchars(statusLabel($appt['status'])); ?></span>
+                        </div>
+                        <div class="information">
+                            <div>
+                                <span>Time</span>
+                                <strong><?php echo date('h:i A', strtotime($appt['appointment_time'])); ?></strong>
+                            </div>
+                            <div>
+                                <span>Procedure</span>
+                                <strong><?php echo htmlspecialchars($appt['procedure_name']); ?></strong>
+                            </div>
+                            <?php if (!empty($appt['dentist_last'])): ?>
+                                <div>
+                                    <span>Dentist</span>
+                                    <strong>Dr. <?php echo htmlspecialchars(trim($appt['dentist_first'] . ' ' . $appt['dentist_last'])); ?></strong>
+                                </div>
+                            <?php endif; ?>
+                            <?php if (!empty($appt['reason'])): ?>
+                                <div>
+                                    <span>Reason</span>
+                                    <strong><?php echo htmlspecialchars($appt['reason']); ?></strong>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+>>>>>>> deployment
             </div>
         <?php else: ?>
             <div class="empty-message">
@@ -312,6 +548,59 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
         <?php endif; ?>
     </div>
 </div>
+
+<div class="modal" id="historyModal">
+    <div class="modal-box">
+        <button class="close-button" onclick="closeModal('historyModal')">&times;</button>
+        <div class="modal-icon history">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+        </div>
+        <h2>Appointment History</h2>
+        <?php if ($appointmentHistory): ?>
+            <div class="appointment-list">
+                <?php foreach ($appointmentHistory as $past): ?>
+                    <div class="appointment-item">
+                        <div class="appointment-item-head">
+                            <strong><?php echo date('M d, Y', strtotime($past['appointment_date'])); ?></strong>
+                            <span class="appointment-status status-<?php echo htmlspecialchars($past['status']); ?>">
+                                <?php echo htmlspecialchars(statusLabel($past['status'])); ?>
+                            </span>
+                        </div>
+                        <div class="information">
+                            <div>
+                                <span>Time</span>
+                                <strong><?php echo date('h:i A', strtotime($past['appointment_time'])); ?></strong>
+                            </div>
+                            <div>
+                                <span>Procedure</span>
+                                <strong><?php echo htmlspecialchars($past['procedure_name']); ?></strong>
+                            </div>
+                            <?php if (!empty($past['dentist_last'])): ?>
+                                <div>
+                                    <span>Dentist</span>
+                                    <strong>Dr. <?php echo htmlspecialchars(trim($past['dentist_first'] . ' ' . $past['dentist_last'])); ?></strong>
+                                </div>
+                            <?php endif; ?>
+                            <?php if (!empty($past['reason'])): ?>
+                                <div>
+                                    <span>Reason</span>
+                                    <strong><?php echo htmlspecialchars($past['reason']); ?></strong>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php else: ?>
+            <div class="empty-message">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                <p>No appointment history yet.</p>
+                <small>Your past appointments will appear here.</small>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
 <div class="modal" id="balanceModal">
     <div class="modal-box">
         <button class="close-button" onclick="closeModal('balanceModal')">&times;</button>
@@ -323,6 +612,7 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
         <p class="modal-note">Outstanding balance</p>
     </div>
 </div>
+
 <div class="modal" id="sessionsModal">
     <div class="modal-box">
         <button class="close-button" onclick="closeModal('sessionsModal')">&times;</button>
@@ -330,8 +620,16 @@ $patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
             <i class="fa-solid fa-clipboard-list"></i>
         </div>
         <h2>Remaining Sessions</h2>
+<<<<<<< HEAD
         <div class="balance-display"><?php echo $remainingSessions; ?> Sessions</div>
         <p class="modal-note">Sessions left to complete</p>
+=======
+        <div class="balance-display">
+            <?php echo $remainingSessions; ?>
+            <?php echo $remainingSessions === 1 ? 'Session' : 'Sessions'; ?>
+        </div>
+        <p class="modal-note">Completed so far: <?php echo $completedSessions; ?></p>
+>>>>>>> deployment
     </div>
 </div>
 <script src="user.js"></script>

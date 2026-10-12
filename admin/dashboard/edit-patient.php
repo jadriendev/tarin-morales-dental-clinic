@@ -85,7 +85,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
         $contact_number = trim($_POST['contact_number'] ?? '');
         $address = trim($_POST['address'] ?? '');
         $email = trim($_POST['email'] ?? '');
+        $username = trim($_POST['username'] ?? '');
         $account_status = trim($_POST['account_status'] ?? 'active');
+        $password = $_POST['password'] ?? '';
 
         if (
             $first_name === '' ||
@@ -94,7 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
             $sex === '' ||
             $contact_number === '' ||
             $address === '' ||
-            $email === ''
+            $email === '' ||
+            $username === ''
         ) {
 
             $error_message = "Please fill in all required fields.";
@@ -123,9 +126,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
 
             $error_message = "Please enter a valid email address.";
 
+        } elseif (strlen($username) > 55) {
+
+            $error_message = "Username must not exceed 55 characters.";
+
+        } elseif (!preg_match('/^[A-Za-z0-9._-]+$/', $username)) {
+
+            $error_message = "Username may only contain letters, numbers, dots, underscores and hyphens.";
+
         } elseif (!in_array($account_status, ['active', 'inactive'], true)) {
 
             $error_message = "Invalid account status.";
+
+        } elseif ($password !== '' && strlen($password) < 6) {
+
+            $error_message = "Password must be at least 6 characters long.";
 
         } else {
 
@@ -170,9 +185,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
                         ':user_id' => $patient['user_id']
                     ]);
 
+                    $stmtCheckUser = $pdo->prepare("
+                        SELECT user_id
+                        FROM tbl_users
+                        WHERE username = :username
+                        AND user_id != :user_id
+                        LIMIT 1
+                    ");
+
+                    $stmtCheckUser->execute([
+                        ':username' => $username,
+                        ':user_id' => $patient['user_id']
+                    ]);
+
                     if ($stmtCheck->fetch()) {
 
                         $error_message = "The email address is already in use by another account.";
+
+                    } elseif ($stmtCheckUser->fetch()) {
+
+                        $error_message = "The username is already in use by another account.";
 
                     } else {
 
@@ -182,15 +214,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
                             UPDATE tbl_users
                             SET
                                 email = :email,
+                                username = :username,
                                 status = :status
                             WHERE user_id = :user_id
                         ");
 
                         $stmtUser->execute([
                             ':email' => $email,
+                            ':username' => $username,
                             ':status' => $account_status,
                             ':user_id' => $patient['user_id']
                         ]);
+
+                        if ($password !== '') {
+
+                            $hashed_password = password_hash(
+                                $password,
+                                PASSWORD_DEFAULT
+                            );
+
+                            $stmtPassword = $pdo->prepare("
+                                UPDATE tbl_users
+                                SET password = :password
+                                WHERE user_id = :user_id
+                            ");
+
+                            $stmtPassword->execute([
+                                ':password' => $hashed_password,
+                                ':user_id' => $patient['user_id']
+                            ]);
+                        }
 
                         $stmtPatient = $pdo->prepare("
                             UPDATE tbl_patients
@@ -230,6 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $patient) {
                         $patient['contact_number'] = $contact_number;
                         $patient['address'] = $address;
                         $patient['email'] = $email;
+                        $patient['username'] = $username;
                         $patient['account_status'] = $account_status;
                     }
 
@@ -315,6 +369,12 @@ include __DIR__ . '/includes/header.php';
   .form-group select:focus,
   .form-group textarea:focus {
     border-color: var(--brand-purple, #9333ea);
+  }
+
+  .form-hint {
+    font-size: 11px;
+    color: var(--text-muted, #9ca3af);
+    margin-top: -4px;
   }
 
   .alert {
@@ -464,6 +524,16 @@ include __DIR__ . '/includes/header.php';
     font-style: italic;
   }
 
+  .toggle-pass {
+    background: none;
+    border: none;
+    padding: 0 0 0 8px;
+    cursor: pointer;
+    color: var(--brand-purple, #9333ea);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
   .confirm-badge {
     display: inline-block;
     padding: 3px 12px;
@@ -566,7 +636,7 @@ include __DIR__ . '/includes/header.php';
 
   <?php if ($patient): ?>
 
-    <form id="editPatientForm" action="" method="POST">
+    <form id="editPatientForm" action="" method="POST" autocomplete="off">
 
       <input
         type="hidden"
@@ -757,7 +827,32 @@ include __DIR__ . '/includes/header.php';
 
         </div>
 
-        <div class="form-group full-width">
+        <div class="form-group">
+
+          <label for="username">
+            Username *
+          </label>
+
+          <input
+            type="text"
+            id="username"
+            name="username"
+            value="<?php
+            echo htmlspecialchars(
+                $patient['username'] ?? '',
+                ENT_QUOTES,
+                'UTF-8'
+            );
+            ?>"
+            maxlength="55"
+            pattern="[A-Za-z0-9._\-]+"
+            title="Letters, numbers, dots, underscores and hyphens only"
+            required
+          >
+
+        </div>
+
+        <div class="form-group">
 
           <label for="account_status">
             Account Status
@@ -787,6 +882,27 @@ include __DIR__ . '/includes/header.php';
             </option>
 
           </select>
+
+        </div>
+
+        <div class="form-group">
+
+          <label for="password">
+            New Password
+          </label>
+
+          <input
+            type="password"
+            id="password"
+            name="password"
+            minlength="6"
+            autocomplete="new-password"
+            placeholder="Leave blank to keep current password"
+          >
+
+          <span class="form-hint">
+            Leave blank if you do not want to change the password.
+          </span>
 
         </div>
 
@@ -870,8 +986,19 @@ include __DIR__ . '/includes/header.php';
             <span class="confirm-value" id="cfEmail"></span>
           </div>
           <div class="confirm-row">
+            <span class="confirm-label">Username</span>
+            <span class="confirm-value" id="cfUsername"></span>
+          </div>
+          <div class="confirm-row">
             <span class="confirm-label">Account Status</span>
             <span class="confirm-value" id="cfStatus"></span>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">New Password</span>
+            <span class="confirm-value">
+              <span id="cfPassword"></span>
+              <button type="button" class="toggle-pass" id="togglePass">Show</button>
+            </span>
           </div>
           <div class="confirm-row">
             <span class="confirm-label">Address</span>
@@ -896,10 +1023,14 @@ include __DIR__ . '/includes/header.php';
 
     <script>
     (function () {
-      var form    = document.getElementById('editPatientForm');
-      var overlay = document.getElementById('confirmOverlay');
-      var btnEdit = document.getElementById('confirmEdit');
-      var btnSave = document.getElementById('confirmSave');
+      var form       = document.getElementById('editPatientForm');
+      var overlay    = document.getElementById('confirmOverlay');
+      var btnEdit    = document.getElementById('confirmEdit');
+      var btnSave    = document.getElementById('confirmSave');
+      var btnToggle  = document.getElementById('togglePass');
+      var cfPassword = document.getElementById('cfPassword');
+
+      var passwordVisible = false;
 
       function setValue(id, text, emptyText) {
         var el = document.getElementById(id);
@@ -950,14 +1081,44 @@ include __DIR__ . '/includes/header.php';
         el.appendChild(badge);
       }
 
-      function openModal() {
-        setValue('cfName',    fullName());
-        setValue('cfBirth',   formatDate(form.birth_date.value));
-        setValue('cfSex',     form.sex.value);
-        setValue('cfContact', form.contact_number.value);
-        setValue('cfEmail',   form.email.value);
-        setValue('cfAddress', form.address.value);
+      function renderPassword() {
+        var pw = form.password.value;
 
+        if (pw === '') {
+          cfPassword.textContent = 'Unchanged';
+          cfPassword.style.fontWeight = '400';
+          cfPassword.style.fontStyle = 'italic';
+          cfPassword.style.letterSpacing = 'normal';
+          btnToggle.style.display = 'none';
+          return;
+        }
+
+        cfPassword.style.fontWeight = '';
+        cfPassword.style.fontStyle = '';
+        btnToggle.style.display = '';
+
+        if (passwordVisible) {
+          cfPassword.textContent = pw;
+          cfPassword.style.letterSpacing = 'normal';
+          btnToggle.textContent = 'Hide';
+        } else {
+          cfPassword.textContent = '•'.repeat(Math.min(pw.length, 20));
+          cfPassword.style.letterSpacing = '2px';
+          btnToggle.textContent = 'Show';
+        }
+      }
+
+      function openModal() {
+        setValue('cfName',     fullName());
+        setValue('cfBirth',    formatDate(form.birth_date.value));
+        setValue('cfSex',      form.sex.value);
+        setValue('cfContact',  form.contact_number.value);
+        setValue('cfEmail',    form.email.value);
+        setValue('cfUsername', form.username.value);
+        setValue('cfAddress',  form.address.value);
+
+        passwordVisible = false;
+        renderPassword();
         renderStatus();
 
         btnSave.disabled = false;
@@ -969,11 +1130,17 @@ include __DIR__ . '/includes/header.php';
       function closeModal() {
         overlay.classList.remove('is-open');
         document.body.style.overflow = '';
+        passwordVisible = false;
       }
 
       form.addEventListener('submit', function (e) {
         e.preventDefault();
         openModal();
+      });
+
+      btnToggle.addEventListener('click', function () {
+        passwordVisible = !passwordVisible;
+        renderPassword();
       });
 
       btnEdit.addEventListener('click', closeModal);
