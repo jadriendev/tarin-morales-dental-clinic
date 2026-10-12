@@ -129,7 +129,7 @@ $error = isset($_GET['error'])
     <div class="flex flex-col items-center mb-6">
         <img src="../images/logo.jpg"
              alt="Tarin Morales Dental Clinic"
-             class="w-[150px] h-[150px] rounded-full object-cover mx-auto">
+             class="w-16 sm:w-20 rounded-full object-cover mx-auto">
         <h1 class="text-2xl font-bold">
             <span class="text-[#1B6FB0]">TARIN-MORALES</span>
         </h1>

@@ -120,7 +120,7 @@ $isLoggedInAdmin = isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 
     <div class="flex flex-col items-center mb-6">
         <img src="image/tarin.svg"
         alt="Tarin Morales Dental Clinic"
-        class="flex items-center justify-center w-[150px] h-[150px] rounded-full object-cover mb-3 mx-auto"
+        class="flex items-center justify-center w-16 sm:w-20 rounded-full object-cover mb-3 mx-auto"
         style="image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;">
         <h1 class="text-2xl font-bold">
             <span class="text-[#1B6FB0]">TARIN-MORALES</span>
