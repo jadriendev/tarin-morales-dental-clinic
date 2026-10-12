@@ -15,13 +15,24 @@
     <link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Bebas+Neue&family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Manrope:wght@200..800&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Quattrocento:wght@400;700&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     <!-- AOS -->
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <style>
+    @media screen and (max-width: 767px) {
+        [data-aos],
+        [data-aos] * {
+            opacity: 1 !important;
+            transform: none !important;
+            transition: none !important;
+            animation: none !important;
+        }
+    }
+</style>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.0/css/all.min.css" integrity="sha512-ApSLB1Pd3/bZN8fWB/RG9YhN/7bd9Hkf3AGaE2mPfebjrxagjuBtx2GcgdqIlJkUzwylBo61r9Xa9NmgBI0swA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <!-- Tailwind CSS -->
      <script src="https://cdn.tailwindcss.com"></script>
     <title>Tarin - Morales Dental Clinic | Quality Dental Care & Appointments</title>
 </head>
-<body class="min-h-screen flex flex-col bg-[#fefefe]">
+<body class="min-h-screen flex flex-col bg-[#fefefe] overflow-x-clip">
     <header class="w-full bg-[#fefefe]/90 backdrop-blur-md sticky top-0 z-50">
         <nav class="flex items-center justify-between max-w-7xl mx-auto py-4 px-5 lg:px-10">
             <a href="" class="shrink-0">
@@ -515,9 +526,11 @@
         <h3 class="text-white text-sm text-center font-semibold">© 2020 Tarin-Morales Dental Clinic. All Rights Reserved.</h3>
     </div>
 
-    <button id="chatToggle" class="fixed bottom-5 right-5 w-16 h-16 rounded-full bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 text-white flex items-center justify-center shadow-2xl hover:scale-110 transition-all duration-300 z-[9999]">
+    
+    <button id="chatToggle" class="fixed right-4 bottom-4 sm:right-5 sm:bottom-5 w-14 h-14 sm:w-16 sm:h-16 max-w-[calc(100vw-2rem)] rounded-full bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 text-white flex items-center justify-center shadow-xl hover:scale-105 transition-transform duration-300 z-[9999]">
         <i class="fa-solid fa-comments text-2xl"></i>
     </button>
+
 
     <div id="chatWindow" class="hidden fixed bottom-28 right-3 left-3 z-50 flex flex-col bg-white rounded-2xl shadow-2xl h-[65vh] max-h-[600px] sm:left-auto sm:w-[370px] sm:right-6 sm:bottom-24">
         <div class="bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 text-white px-4 py-3 sm:px-5 sm:py-4 flex justify-between items-center shrink-0 rounded-t-2xl">
@@ -560,7 +573,7 @@
 <script src="scripts/hamburger.js"></script>
 <script src="scripts/knowledge.js"></script>
 <script src="scripts/responses.js"></script>
-<script src="scripts/chatbot.js"></script>
+<script src="scripts/test.js"></script>
 <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
 <script src="scripts/aos.js"></script>
 </html>
