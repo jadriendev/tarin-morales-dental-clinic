@@ -2,10 +2,11 @@
 require_once 'config.php';
 require_once 'session-checker.php';
 
+$dentist_id = filter_var($_SESSION['dentist_id'] ?? null, FILTER_VALIDATE_INT) ?: 0;
 $appointment_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT) ?: 0;
-$stmt = mysqli_prepare($link, 'SELECT patient_id FROM tbl_appointments WHERE appointment_id = ? LIMIT 1');
+$stmt = mysqli_prepare($link, 'SELECT patient_id FROM tbl_appointments WHERE appointment_id = ? AND dentist_id = ? LIMIT 1');
 if ($stmt) {
-    mysqli_stmt_bind_param($stmt, 'i', $appointment_id);
+    mysqli_stmt_bind_param($stmt, 'ii', $appointment_id, $dentist_id);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
     $appointment = mysqli_fetch_assoc($result);
