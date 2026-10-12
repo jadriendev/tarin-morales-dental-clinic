@@ -24,23 +24,8 @@ if (!$patient) {
     exit();
 }
 
-<<<<<<< HEAD
-$appointmentStmt = $pdo->prepare("
-    SELECT appointment_date, appointment_time, procedure_name, status
-    FROM tbl_appointments
-    WHERE patient_id = :patient_id
-    AND (
-        appointment_date > CURDATE()
-        OR (appointment_date = CURDATE() AND appointment_time >= CURTIME())
-    )
-    AND status IN ('pending', 'confirmed')
-    ORDER BY appointment_date ASC, appointment_time ASC
-    LIMIT 1
-");
-=======
 $remainingBalance  = (float) ($patient['remaining_balance'] ?? 0);
 $remainingSessions = (int) ($patient['remaining_session'] ?? 0);
->>>>>>> deployment
 
 $sessionStmt = $pdo->prepare("SELECT COUNT(*) FROM tbl_dental_records WHERE patient_id = :patient_id");
 $sessionStmt->execute(['patient_id' => $patient['patient_id']]);
@@ -98,15 +83,6 @@ foreach ($teethRecords as $tooth) {
         $teethConcernCount++;
     }
 }
-<<<<<<< HEAD
-
-$teethStatus = $teethConcernCount > 0 ? 'Needs Attention' : 'Good';
-$fullName = trim($patient['first_name'] . ' ' . ($patient['middle_name'] ? $patient['middle_name'] . ' ' : '') . $patient['last_name']);
-$displayName = $patient['first_name'];
-$remainingBalance = (float)($patient['remaining_balance'] ?? 0);
-$remainingSessions = $patient['remaining_session'] ?? '0';
-$patientId = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
-=======
 $teethStatus      = $teethConcernCount > 0 ? 'Needs Attention' : 'Good';
 $teethStatusClass = $teethConcernCount > 0 ? 'status-warning' : 'status-good';
 
@@ -118,7 +94,6 @@ $fullName = trim(
 $displayName = $patient['first_name'];
 $patientId   = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
 $email       = $_SESSION['email'] ?? '';
->>>>>>> deployment
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -131,9 +106,6 @@ $email       = $_SESSION['email'] ?? '';
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
     <link rel="shortcut icon" href="../images/logo.jpg" type="image/x-icon">
-<<<<<<< HEAD
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-=======
     <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css"
         crossorigin="anonymous"
@@ -209,7 +181,6 @@ $email       = $_SESSION['email'] ?? '';
         color: #b45f06 !important;
     }
     </style>
->>>>>>> deployment
 </head>
 <body>
 <header class="navbar">
@@ -302,13 +273,9 @@ $email       = $_SESSION['email'] ?? '';
                     <i class="fa-solid fa-arrow-up-right-from-square card-arrow"></i>
                 </div>
                 <h3>Remaining Balance</h3>
-<<<<<<< HEAD
-                <strong class="card-number">₱ <?php echo number_format($remainingBalance, 2); ?></strong>
-=======
                 <strong class="card-number">
                     ₱ <?php echo number_format($remainingBalance, 2); ?>
                 </strong>
->>>>>>> deployment
                 <p>Outstanding balance.</p>
                 <div class="card-footer">
                     <span>View balance</span>
@@ -324,14 +291,10 @@ $email       = $_SESSION['email'] ?? '';
                     <i class="fa-solid fa-arrow-up-right-from-square card-arrow"></i>
                 </div>
                 <h3>Remaining Sessions</h3>
-<<<<<<< HEAD
-                <strong class="card-number"><?php echo $remainingSessions; ?> Sessions</strong>
-=======
                 <strong class="card-number">
                     <?php echo $remainingSessions; ?>
                     <?php echo $remainingSessions === 1 ? 'Session' : 'Sessions'; ?>
                 </strong>
->>>>>>> deployment
                 <p>Sessions left to complete.</p>
                 <div class="card-footer">
                     <span>View sessions</span>
@@ -344,15 +307,11 @@ $email       = $_SESSION['email'] ?? '';
                     <div class="card-icon appointment">
                         <i class="fa-regular fa-calendar-days"></i>
                     </div>
-<<<<<<< HEAD
-                    <span class="appointment-status"><?php echo $nextAppointment ? 'Scheduled' : 'No appointment'; ?></span>
-=======
                     <span class="appointment-status">
                         <?php echo $nextAppointment
                             ? htmlspecialchars(statusLabel($nextAppointment['status']))
                             : 'No appointment'; ?>
                     </span>
->>>>>>> deployment
                 </div>
                 <h3>Next Appointment</h3>
                 <?php if ($nextAppointment): ?>
@@ -361,15 +320,11 @@ $email       = $_SESSION['email'] ?? '';
                     </strong>
                     <p>
                         <?php echo date('h:i A', strtotime($nextAppointment['appointment_time'])); ?>
-<<<<<<< HEAD
-                        - <?php echo htmlspecialchars($nextAppointment['procedure_name']); ?>
-=======
                         -
                         <?php echo htmlspecialchars($nextAppointment['procedure_name']); ?>
                         <?php if ($moreAppointments > 0): ?>
                             <br>+<?php echo $moreAppointments; ?> more upcoming
                         <?php endif; ?>
->>>>>>> deployment
                     </p>
                 <?php else: ?>
                     <strong class="appointment-empty">No upcoming appointment</strong>
@@ -436,11 +391,7 @@ $email       = $_SESSION['email'] ?? '';
             </div>
             <div>
                 <span>Email</span>
-<<<<<<< HEAD
-                <strong><?php echo htmlspecialchars($_SESSION['email'] ?? ''); ?></strong>
-=======
                 <strong><?php echo htmlspecialchars($email); ?></strong>
->>>>>>> deployment
             </div>
             <div>
                 <span>Date Registered</span>
@@ -461,13 +412,9 @@ $email       = $_SESSION['email'] ?? '';
         <div class="information">
             <div>
                 <span>Current Status</span>
-<<<<<<< HEAD
-                <strong class="good-text"><?php echo htmlspecialchars($teethStatus); ?></strong>
-=======
                 <strong class="<?php echo $teethConcernCount > 0 ? 'warning-text' : 'good-text'; ?>">
                     <?php echo htmlspecialchars($teethStatus); ?>
                 </strong>
->>>>>>> deployment
             </div>
             <div>
                 <span>Teeth with concerns</span>
@@ -483,27 +430,6 @@ $email       = $_SESSION['email'] ?? '';
         <div class="modal-icon appointment">
             <i class="fa-regular fa-calendar-days"></i>
         </div>
-<<<<<<< HEAD
-        <h2>Next Appointment</h2>
-        <?php if ($nextAppointment): ?>
-            <div class="information">
-                <div>
-                    <span>Date</span>
-                    <strong><?php echo date('M d, Y', strtotime($nextAppointment['appointment_date'])); ?></strong>
-                </div>
-                <div>
-                    <span>Time</span>
-                    <strong><?php echo date('h:i A', strtotime($nextAppointment['appointment_time'])); ?></strong>
-                </div>
-                <div>
-                    <span>Procedure</span>
-                    <strong><?php echo htmlspecialchars($nextAppointment['procedure_name']); ?></strong>
-                </div>
-                <div>
-                    <span>Status</span>
-                    <strong><?php echo htmlspecialchars(ucfirst($nextAppointment['status'])); ?></strong>
-                </div>
-=======
         <h2>Upcoming Appointments</h2>
         <?php if ($upcomingAppointments): ?>
             <div class="appointment-list">
@@ -537,7 +463,6 @@ $email       = $_SESSION['email'] ?? '';
                         </div>
                     </div>
                 <?php endforeach; ?>
->>>>>>> deployment
             </div>
         <?php else: ?>
             <div class="empty-message">
@@ -620,16 +545,11 @@ $email       = $_SESSION['email'] ?? '';
             <i class="fa-solid fa-clipboard-list"></i>
         </div>
         <h2>Remaining Sessions</h2>
-<<<<<<< HEAD
-        <div class="balance-display"><?php echo $remainingSessions; ?> Sessions</div>
-        <p class="modal-note">Sessions left to complete</p>
-=======
         <div class="balance-display">
             <?php echo $remainingSessions; ?>
             <?php echo $remainingSessions === 1 ? 'Session' : 'Sessions'; ?>
         </div>
         <p class="modal-note">Completed so far: <?php echo $completedSessions; ?></p>
->>>>>>> deployment
     </div>
 </div>
 <script src="user.js"></script>
