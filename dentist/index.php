@@ -6,49 +6,43 @@ $error = '';
 
 if (isset($_POST['signin'])) {
 
-    $username = trim($_POST['dentist_username']);
-    $password = $_POST['password'];
+    $username = trim($_POST['dentist_username'] ?? '');
+    $password = $_POST['password'] ?? '';
 
     if (empty($username) || empty($password)) {
 
         $error = "Please enter your username and password.";
 
     } else {
-
-        $username = mysqli_real_escape_string($link, $username);
-
-        $sql = "SELECT * FROM tbl_dentists
-                WHERE username = '$username'
-                AND status = 'active'
+        $sql = "SELECT dentist_id, username, first_name, last_name, password
+                FROM tbl_dentists
+                WHERE username = ?
+                    AND LOWER(status) = 'active'
                 LIMIT 1";
+        $stmt = mysqli_prepare($link, $sql);
 
-        $result = mysqli_query($link, $sql);
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, 's', $username);
+            mysqli_stmt_execute($stmt);
+            $result = mysqli_stmt_get_result($stmt);
+            $dentist = mysqli_fetch_assoc($result) ?: null;
+            mysqli_stmt_close($stmt);
 
-        if ($result && mysqli_num_rows($result) === 1) {
-
-            $dentist = mysqli_fetch_assoc($result);
-
-            // Verify hashed password
-            if (password_verify($password, $dentist['password'])) {
-
+            if ($dentist && password_verify($password, $dentist['password'])) {
+                session_regenerate_id(true);
                 $_SESSION['dentist_id'] = $dentist['dentist_id'];
                 $_SESSION['dentist_username'] = $dentist['username'];
-                $_SESSION['dentist_name'] =
-                    $dentist['first_name'] . ' ' . $dentist['last_name'];
+                $_SESSION['dentist_name'] = $dentist['first_name'] . ' ' . $dentist['last_name'];
 
                 header("Location: dentist-dashboard.php");
                 exit();
 
             } else {
-
                 $error = "Incorrect username or password.";
-
             }
-
         } else {
-
-            $error = "Incorrect username or password.";
-
+            error_log('Could not prepare dentist login query: ' . mysqli_error($link));
+            $error = "Unable to sign in right now. Please try again.";
         }
     }
 }
@@ -102,7 +96,7 @@ if (isset($_POST['signin'])) {
                 <label for="dentist_username" class="text-[.80rem] text-gray-600 font-semibold">Dentist Username</label>
                 <div class="relative mt-1">
                     <i class="text-[1.1rem] text-gray-500 top-3 left-[.40rem] absolute fa fa-user"></i>
-                    <input class="border py-[.60rem] pl-9 w-full rounded-md text-[.90rem] focus:outline-none focus:ring-2 focus:ring-blue-600" type="text" name="dentist_username" id="dentist_username" placeholder="Enter your username" required>
+                    <input class="border py-[.60rem] pl-9 w-full rounded-md text-[.90rem] focus:outline-none focus:ring-2 focus:ring-blue-600" type="text" name="dentist_username" id="dentist_username" placeholder="Enter your username" autocomplete="username" required>
                 </div>
             </div>
 
@@ -130,7 +124,7 @@ if (isset($_POST['signin'])) {
         </button>
     
         <!-- Note -->
-        <p class="text-[.70rem] text-gray-500 font-semibold mt-7 text-center">Dentist access only. Non-admin accounts will be denied.</p>
+        <p class="text-[.70rem] text-gray-500 font-semibold mt-7 text-center">Use the dentist username and password assigned to your account.</p>
     </form>
 
 <script src="../scripts/mata.js"></script>

@@ -3,13 +3,13 @@
 </div>
 
 <style>
-  /* Ensure profile dropdown remains responsive on small screens */
   .profile-dropdown {
     position: absolute;
     right: 0;
-    top: 100%;
+    top: calc(100% + 10px);
     z-index: 1000;
     display: none;
+    width: 220px;
     max-width: calc(100vw - 32px);
   }
 
@@ -34,12 +34,18 @@
     if (profileMenuBtn && profileDropdown) {
       profileMenuBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+
         profileDropdown.classList.toggle('show');
+        profileMenuBtn.classList.toggle('active');
       });
 
       document.addEventListener('click', (e) => {
-        if (!profileDropdown.contains(e.target) && profileDropdown.classList.contains('show')) {
+        if (
+          !profileMenuBtn.contains(e.target) &&
+          !profileDropdown.contains(e.target)
+        ) {
           profileDropdown.classList.remove('show');
+          profileMenuBtn.classList.remove('active');
         }
       });
     }
@@ -51,5 +57,6 @@
     }
   });
 </script>
+
 </body>
 </html>

@@ -1,107 +1,233 @@
 <?php
+require_once __DIR__ . '/../config.php';
+
 $page_title = "Add Patient";
 $header_title = "Register New Patient";
 
 include __DIR__ . '/includes/header.php';
 
-// Ensure session is started for CSRF (if not already started in header.php)
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Generate CSRF token if not set
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 $success_message = '';
-$error_message   = '';
+$error_message = '';
 
-// Standard form values initialization
-$first_name     = '';
-$middle_name    = '';
-$last_name      = '';
-$birth_date     = '';
-$sex            = '';
+$first_name = '';
+$middle_name = '';
+$last_name = '';
+$birth_date = '';
+$sex = '';
 $contact_number = '';
-$address        = '';
-$email          = '';
-$account_status = 'Active';
+$address = '';
+$username = '';
+$email = '';
+$account_status = 'active';
+
+$allowed_statuses = ['active', 'inactive'];
+$allowed_sex = ['Male', 'Female'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // 1. Verify CSRF Token
+
     $csrf_token = $_POST['csrf_token'] ?? '';
+
     if (!hash_equals($_SESSION['csrf_token'], $csrf_token)) {
+
         $error_message = "Invalid security token. Please refresh and try again.";
+
     } else {
-        $first_name     = trim($_POST['first_name'] ?? '');
-        $middle_name    = trim($_POST['middle_name'] ?? '');
-        $last_name      = trim($_POST['last_name'] ?? '');
-        $birth_date     = trim($_POST['birth_date'] ?? '');
-        $sex            = trim($_POST['sex'] ?? '');
+
+        $first_name = trim($_POST['first_name'] ?? '');
+        $middle_name = trim($_POST['middle_name'] ?? '');
+        $last_name = trim($_POST['last_name'] ?? '');
+        $birth_date = trim($_POST['birth_date'] ?? '');
+        $sex = trim($_POST['sex'] ?? '');
         $contact_number = trim($_POST['contact_number'] ?? '');
-        $address        = trim($_POST['address'] ?? '');
-        $email          = trim($_POST['email'] ?? '');
-        $password       = $_POST['password'] ?? '';
-        $account_status = trim($_POST['account_status'] ?? 'Active');
+        $address = trim($_POST['address'] ?? '');
+        $username = trim($_POST['username'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $password = $_POST['password'] ?? '';
+        $account_status = trim($_POST['account_status'] ?? 'active');
 
-        // Explicit validation checks
-        if ($first_name === '' || $last_name === '' || $birth_date === '' || $sex === '' || $email === '' || $password === '') {
-            $error_message = "Please fill in all required fields (First Name, Last Name, Birth Date, Sex, Email, and Password).";
+        if (
+            $first_name === '' ||
+            $last_name === '' ||
+            $birth_date === '' ||
+            $sex === '' ||
+            $contact_number === '' ||
+            $address === '' ||
+            $username === '' ||
+            $email === '' ||
+            $password === ''
+        ) {
+
+            $error_message = "Please fill in all required fields.";
+
+        } elseif (!in_array($sex, $allowed_sex, true)) {
+
+            $error_message = "Invalid sex selected.";
+
+        } elseif (!in_array($account_status, $allowed_statuses, true)) {
+
+            $error_message = "Invalid account status selected.";
+
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error_message = "Please enter a valid email address.";
-        } elseif (strlen($password) < 6) {
-            $error_message = "Password must be at least 6 characters long.";
-        } else {
-            try {
-                // Check if email already exists
-                $stmtCheck = $pdo->prepare("SELECT user_id FROM tbl_users WHERE email = ?");
-                $stmtCheck->execute([$email]);
 
-                if ($stmtCheck->fetch()) {
+            $error_message = "Please enter a valid email address.";
+
+        } elseif (strlen($password) < 6) {
+
+            $error_message = "Password must be at least 6 characters long.";
+
+        } elseif (strlen($contact_number) > 20) {
+
+            $error_message = "Contact number must not exceed 20 characters.";
+
+        } elseif (strlen($username) > 55) {
+
+            $error_message = "Username must not exceed 55 characters.";
+
+        } else {
+
+            try {
+
+                $stmtCheckEmail = $pdo->prepare("
+                    SELECT user_id
+                    FROM tbl_users
+                    WHERE email = :email
+                    LIMIT 1
+                ");
+
+                $stmtCheckEmail->execute([
+                    ':email' => $email
+                ]);
+
+                if ($stmtCheckEmail->fetch()) {
+
                     $error_message = "The email address is already registered.";
+
                 } else {
+
                     $pdo->beginTransaction();
 
-                    // 1. Create user account
-                    $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                    $hashed_password = password_hash(
+                        $password,
+                        PASSWORD_DEFAULT
+                    );
+
                     $stmtUser = $pdo->prepare("
-                        INSERT INTO tbl_users (email, password, role, status, created_at) 
-                        VALUES (?, ?, 'patient', ?, NOW())
+                        INSERT INTO tbl_users (
+                            email,
+                            username,
+                            password,
+                            role,
+                            status
+                        )
+                        VALUES (
+                            :email,
+                            :username,
+                            :password,
+                            'patient',
+                            :status
+                        )
                     ");
-                    $stmtUser->execute([$email, $hashed_password, strtolower($account_status)]);
+
+                    $stmtUser->execute([
+                        ':email' => $email,
+                        ':username' => $username,
+                        ':password' => $hashed_password,
+                        ':status' => $account_status
+                    ]);
+
                     $user_id = $pdo->lastInsertId();
 
-                    // 2. Create patient profile
                     $stmtPatient = $pdo->prepare("
-                        INSERT INTO tbl_patients (user_id, first_name, middle_name, last_name, birth_date, sex, contact_number, address, date_registered) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                        INSERT INTO tbl_patients (
+                            user_id,
+                            first_name,
+                            middle_name,
+                            last_name,
+                            birth_date,
+                            sex,
+                            contact_number,
+                            address,
+                            remaining_balance,
+                            remaining_session
+                        )
+                        VALUES (
+                            :user_id,
+                            :first_name,
+                            :middle_name,
+                            :last_name,
+                            :birth_date,
+                            :sex,
+                            :contact_number,
+                            :address,
+                            '0',
+                            '0'
+                        )
                     ");
+
                     $stmtPatient->execute([
-                        $user_id,
-                        $first_name,
-                        $middle_name !== '' ? $middle_name : null,
-                        $last_name,
-                        $birth_date,
-                        $sex,
-                        $contact_number !== '' ? $contact_number : null,
-                        $address !== '' ? $address : null
+                        ':user_id' => $user_id,
+                        ':first_name' => $first_name,
+                        ':middle_name' => $middle_name !== '' ? $middle_name : null,
+                        ':last_name' => $last_name,
+                        ':birth_date' => $birth_date,
+                        ':sex' => $sex,
+                        ':contact_number' => $contact_number,
+                        ':address' => $address
                     ]);
 
                     $pdo->commit();
+
                     $success_message = "Patient registered successfully!";
 
-                    // Reset values after successful creation
-                    $first_name = $middle_name = $last_name = $birth_date = $sex = $contact_number = $address = $email = '';
-                    $account_status = 'Active';
+                    $first_name = '';
+                    $middle_name = '';
+                    $last_name = '';
+                    $birth_date = '';
+                    $sex = '';
+                    $contact_number = '';
+                    $address = '';
+                    $username = '';
+                    $email = '';
+                    $account_status = 'active';
                 }
-            } catch (Exception $e) {
+            } catch (PDOException $e) {
+
                 if ($pdo->inTransaction()) {
                     $pdo->rollBack();
                 }
-                // Log actual error to server logs and show friendly message to user
-                error_log($e->getMessage());
-                $error_message = "An error occurred while saving. Please try again.";
+
+                error_log("Database Error (Add Patient): " . $e->getMessage());
+
+                if ($e->getCode() === '23000') {
+
+                    if (strpos($e->getMessage(), 'email') !== false) {
+                        $error_message = "The email address is already registered.";
+                    } else {
+                        $error_message = "The username or email may already be registered.";
+                    }
+
+                } else {
+
+                    $error_message = "An error occurred while saving the patient. Please try again.";
+                }
+
+            } catch (Exception $e) {
+
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+
+                error_log("System Error (Add Patient): " . $e->getMessage());
+
+                $error_message = "An unexpected error occurred. Please try again.";
             }
         }
     }
@@ -220,10 +346,146 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     box-shadow: 0 6px 16px rgba(147, 51, 234, 0.35);
   }
 
+  .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
   .btn-secondary {
     background: var(--gradient-subtle);
     color: var(--text-main);
     border: 1px solid var(--border-color);
+  }
+
+  .confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 9999;
+  }
+
+  .confirm-overlay.is-open {
+    display: flex;
+    animation: confirmFade 0.15s ease;
+  }
+
+  .confirm-modal {
+    background: var(--surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 540px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: confirmPop 0.2s ease;
+  }
+
+  .confirm-header {
+    padding: 20px 24px 12px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .confirm-header h3 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    color: var(--text-main);
+  }
+
+  .confirm-header p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .confirm-body {
+    padding: 8px 24px;
+  }
+
+  .confirm-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px dashed var(--border-color);
+    font-size: 14px;
+  }
+
+  .confirm-row:last-child {
+    border-bottom: none;
+  }
+
+  .confirm-label {
+    flex: 0 0 130px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .confirm-value {
+    flex: 1;
+    text-align: right;
+    color: var(--text-main);
+    font-weight: 600;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+
+  .confirm-value.is-empty {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-style: italic;
+  }
+
+  .toggle-pass {
+    background: none;
+    border: none;
+    padding: 0 0 0 8px;
+    cursor: pointer;
+    color: var(--brand-purple);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .confirm-badge {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .confirm-badge.active {
+    background: #dcfce7;
+    color: #15803d;
+  }
+
+  .confirm-badge.inactive {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
+
+  .confirm-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px 20px;
+    border-top: 1px solid var(--border-color);
+  }
+
+  @keyframes confirmFade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @keyframes confirmPop {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
   }
 
   @media (max-width: 768px) {
@@ -231,9 +493,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .form-grid-3 {
       grid-template-columns: 1fr;
     }
+
     .form-group.full-width,
     .form-grid-3 {
       grid-column: span 1;
+    }
+
+    .confirm-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    .confirm-label {
+      flex: none;
+    }
+
+    .confirm-value {
+      text-align: left;
     }
   }
 </style>
@@ -244,96 +521,393 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 
 <div class="form-container">
+
   <?php if (!empty($success_message)): ?>
     <div class="alert alert-success">
-      <i class="fa-solid fa-circle-check"></i> <?php echo htmlspecialchars($success_message, ENT_QUOTES, 'UTF-8'); ?>
+      <i class="fa-solid fa-circle-check"></i>
+      <?php echo htmlspecialchars($success_message, ENT_QUOTES, 'UTF-8'); ?>
     </div>
   <?php endif; ?>
 
   <?php if (!empty($error_message)): ?>
     <div class="alert alert-danger">
-      <i class="fa-solid fa-circle-exclamation"></i> <?php echo htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8'); ?>
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <?php echo htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8'); ?>
     </div>
   <?php endif; ?>
 
-  <form action="" method="POST">
-    <!-- CSRF Token Hidden Input -->
-    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+  <form id="patientForm" action="" method="POST">
+
+    <input
+      type="hidden"
+      name="csrf_token"
+      value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>"
+    >
 
     <div class="form-grid">
-      
-      <!-- Name Section -->
+
       <div class="form-grid-3">
+
         <div class="form-group">
           <label for="first_name">First Name *</label>
-          <input type="text" id="first_name" name="first_name" value="<?php echo htmlspecialchars($first_name, ENT_QUOTES, 'UTF-8'); ?>" required placeholder="e.g. Juan">
+          <input
+            type="text"
+            id="first_name"
+            name="first_name"
+            value="<?php echo htmlspecialchars($first_name, ENT_QUOTES, 'UTF-8'); ?>"
+            required
+            placeholder="e.g. Juan"
+          >
         </div>
 
         <div class="form-group">
           <label for="middle_name">Middle Name</label>
-          <input type="text" id="middle_name" name="middle_name" value="<?php echo htmlspecialchars($middle_name, ENT_QUOTES, 'UTF-8'); ?>" placeholder="e.g. Santos">
+          <input
+            type="text"
+            id="middle_name"
+            name="middle_name"
+            value="<?php echo htmlspecialchars($middle_name, ENT_QUOTES, 'UTF-8'); ?>"
+            placeholder="e.g. Santos"
+          >
         </div>
 
         <div class="form-group">
           <label for="last_name">Last Name *</label>
-          <input type="text" id="last_name" name="last_name" value="<?php echo htmlspecialchars($last_name, ENT_QUOTES, 'UTF-8'); ?>" required placeholder="e.g. Dela Cruz">
+          <input
+            type="text"
+            id="last_name"
+            name="last_name"
+            value="<?php echo htmlspecialchars($last_name, ENT_QUOTES, 'UTF-8'); ?>"
+            required
+            placeholder="e.g. Dela Cruz"
+          >
         </div>
+
       </div>
 
-      <!-- Demographics -->
       <div class="form-group">
         <label for="birth_date">Birth Date *</label>
-        <input type="date" id="birth_date" name="birth_date" value="<?php echo htmlspecialchars($birth_date, ENT_QUOTES, 'UTF-8'); ?>" required max="<?php echo date('Y-m-d'); ?>">
+        <input
+          type="date"
+          id="birth_date"
+          name="birth_date"
+          value="<?php echo htmlspecialchars($birth_date, ENT_QUOTES, 'UTF-8'); ?>"
+          required
+          max="<?php echo date('Y-m-d'); ?>"
+        >
       </div>
 
       <div class="form-group">
         <label for="sex">Sex *</label>
         <select id="sex" name="sex" required>
           <option value="">-- Select Sex --</option>
-          <option value="Male" <?php echo ($sex === 'Male') ? 'selected' : ''; ?>>Male</option>
-          <option value="Female" <?php echo ($sex === 'Female') ? 'selected' : ''; ?>>Female</option>
+          <option value="Male" <?php echo ($sex === 'Male') ? 'selected' : ''; ?>>
+            Male
+          </option>
+          <option value="Female" <?php echo ($sex === 'Female') ? 'selected' : ''; ?>>
+            Female
+          </option>
         </select>
       </div>
 
-      <!-- Contact & Account -->
       <div class="form-group">
-        <label for="contact_number">Contact Number</label>
-        <input type="text" id="contact_number" name="contact_number" value="<?php echo htmlspecialchars($contact_number, ENT_QUOTES, 'UTF-8'); ?>" placeholder="e.g. 09123456789">
+        <label for="contact_number">Contact Number *</label>
+        <input
+          type="text"
+          id="contact_number"
+          name="contact_number"
+          value="<?php echo htmlspecialchars($contact_number, ENT_QUOTES, 'UTF-8'); ?>"
+          required
+          maxlength="20"
+          placeholder="e.g. 09123456789"
+        >
+      </div>
+
+      <div class="form-group">
+        <label for="username">Username *</label>
+        <input
+          type="text"
+          id="username"
+          name="username"
+          value="<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>"
+          required
+          maxlength="55"
+          placeholder="e.g. juandela"
+        >
       </div>
 
       <div class="form-group">
         <label for="email">Email Address *</label>
-        <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8'); ?>" required placeholder="e.g. patient@example.com">
+        <input
+          type="email"
+          id="email"
+          name="email"
+          value="<?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8'); ?>"
+          required
+          maxlength="255"
+          placeholder="e.g. patient@example.com"
+        >
       </div>
 
       <div class="form-group">
         <label for="password">Account Password *</label>
-        <input type="password" id="password" name="password" required placeholder="Minimum 6 characters">
+        <input
+          type="password"
+          id="password"
+          name="password"
+          required
+          minlength="6"
+          placeholder="Minimum 6 characters"
+        >
       </div>
 
       <div class="form-group">
         <label for="account_status">Account Status</label>
         <select id="account_status" name="account_status">
-          <option value="Active" <?php echo ($account_status === 'Active') ? 'selected' : ''; ?>>Active</option>
-          <option value="Inactive" <?php echo ($account_status === 'Inactive') ? 'selected' : ''; ?>>Inactive</option>
+
+          <option
+            value="active"
+            <?php echo ($account_status === 'active') ? 'selected' : ''; ?>
+          >
+            Active
+          </option>
+
+          <option
+            value="inactive"
+            <?php echo ($account_status === 'inactive') ? 'selected' : ''; ?>
+          >
+            Inactive
+          </option>
+
         </select>
       </div>
 
-      <!-- Address -->
       <div class="form-group full-width">
-        <label for="address">Residential Address</label>
-        <textarea id="address" name="address" rows="3" placeholder="Enter complete home address..."><?php echo htmlspecialchars($address, ENT_QUOTES, 'UTF-8'); ?></textarea>
+        <label for="address">Residential Address *</label>
+        <textarea
+          id="address"
+          name="address"
+          rows="3"
+          required
+          placeholder="Enter complete home address..."
+        ><?php echo htmlspecialchars($address, ENT_QUOTES, 'UTF-8'); ?></textarea>
       </div>
 
     </div>
 
     <div class="form-actions">
-      <a href="patient.php" class="btn btn-secondary">Cancel</a>
+
+      <a href="patients.php" class="btn btn-secondary">
+        Cancel
+      </a>
+
       <button type="submit" class="btn btn-primary">
-        <i class="fa-solid fa-user-plus"></i> Save Patient
+        <i class="fa-solid fa-user-plus"></i>
+        Save Patient
       </button>
+
     </div>
+
   </form>
 </div>
+
+<div
+  class="confirm-overlay"
+  id="confirmOverlay"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="confirmTitle"
+>
+  <div class="confirm-modal">
+
+    <div class="confirm-header">
+      <h3 id="confirmTitle">Confirm Patient Details</h3>
+      <p>Please double-check the details below before saving.</p>
+    </div>
+
+    <div class="confirm-body">
+      <div class="confirm-row">
+        <span class="confirm-label">Full Name</span>
+        <span class="confirm-value" id="cfName"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Birth Date</span>
+        <span class="confirm-value" id="cfBirth"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Sex</span>
+        <span class="confirm-value" id="cfSex"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Contact Number</span>
+        <span class="confirm-value" id="cfContact"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Address</span>
+        <span class="confirm-value" id="cfAddress"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Username</span>
+        <span class="confirm-value" id="cfUsername"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Email</span>
+        <span class="confirm-value" id="cfEmail"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Password</span>
+        <span class="confirm-value">
+          <span id="cfPassword"></span>
+          <button type="button" class="toggle-pass" id="togglePass">Show</button>
+        </span>
+      </div>
+      <div class="confirm-row">
+        <span class="confirm-label">Account Status</span>
+        <span class="confirm-value" id="cfStatus"></span>
+      </div>
+    </div>
+
+    <div class="confirm-footer">
+      <button type="button" class="btn btn-secondary" id="confirmEdit">
+        <i class="fa-solid fa-pen"></i>
+        Edit
+      </button>
+
+      <button type="button" class="btn btn-primary" id="confirmSave">
+        <i class="fa-solid fa-user-plus"></i>
+        Confirm &amp; Save
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var form       = document.getElementById('patientForm');
+  var overlay    = document.getElementById('confirmOverlay');
+  var btnEdit    = document.getElementById('confirmEdit');
+  var btnSave    = document.getElementById('confirmSave');
+  var btnToggle  = document.getElementById('togglePass');
+  var cfPassword = document.getElementById('cfPassword');
+
+  var passwordVisible = false;
+
+  function setValue(id, text, emptyText) {
+    var el = document.getElementById(id);
+    var value = (text || '').trim();
+
+    if (value === '') {
+      el.textContent = emptyText || '—';
+      el.classList.add('is-empty');
+    } else {
+      el.textContent = value;
+      el.classList.remove('is-empty');
+    }
+  }
+
+  function fullName() {
+    return [
+      form.first_name.value,
+      form.middle_name.value,
+      form.last_name.value
+    ].map(function (part) {
+      return part.trim();
+    }).filter(function (part) {
+      return part !== '';
+    }).join(' ');
+  }
+
+  function formatDate(value) {
+    if (!value) return '';
+    var d = new Date(value + 'T00:00:00');
+    if (isNaN(d.getTime())) return value;
+    return d.toLocaleDateString('en-PH', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  }
+
+  function renderPassword() {
+    var pw = form.password.value;
+
+    if (passwordVisible) {
+      cfPassword.textContent = pw;
+      cfPassword.style.letterSpacing = 'normal';
+      btnToggle.textContent = 'Hide';
+    } else {
+      cfPassword.textContent = '•'.repeat(Math.min(pw.length, 20));
+      cfPassword.style.letterSpacing = '2px';
+      btnToggle.textContent = 'Show';
+    }
+  }
+
+  function renderStatus() {
+    var el = document.getElementById('cfStatus');
+    var value = form.account_status.value;
+
+    el.textContent = '';
+
+    var badge = document.createElement('span');
+    badge.className = 'confirm-badge ' + (value === 'inactive' ? 'inactive' : 'active');
+    badge.textContent = value.charAt(0).toUpperCase() + value.slice(1);
+
+    el.appendChild(badge);
+  }
+
+  function openModal() {
+    setValue('cfName',     fullName());
+    setValue('cfBirth',    formatDate(form.birth_date.value));
+    setValue('cfSex',      form.sex.value);
+    setValue('cfContact',  form.contact_number.value);
+    setValue('cfAddress',  form.address.value);
+    setValue('cfUsername', form.username.value);
+    setValue('cfEmail',    form.email.value);
+
+    passwordVisible = false;
+    renderPassword();
+    renderStatus();
+
+    btnSave.disabled = false;
+    overlay.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+    btnSave.focus();
+  }
+
+  function closeModal() {
+    overlay.classList.remove('is-open');
+    document.body.style.overflow = '';
+    passwordVisible = false;
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    openModal();
+  });
+
+  btnToggle.addEventListener('click', function () {
+    passwordVisible = !passwordVisible;
+    renderPassword();
+  });
+
+  btnEdit.addEventListener('click', closeModal);
+
+  btnSave.addEventListener('click', function () {
+    btnSave.disabled = true;
+    form.submit();
+  });
+
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) closeModal();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('is-open')) {
+      closeModal();
+    }
+  });
+})();
+</script>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>
