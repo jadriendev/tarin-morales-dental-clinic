@@ -54,24 +54,43 @@ function statusLabel($status)
     return ucfirst(str_replace('_', ' ', (string) $status));
 }
 
+
 $historyStmt = $pdo->prepare("
-    SELECT a.appointment_date, a.appointment_time, a.procedure_name,
-           a.reason, a.status, d.first_name AS dentist_first, d.last_name AS dentist_last
+    SELECT
+        a.appointment_id,
+        a.appointment_date,
+        a.appointment_time,
+        a.procedure_name,
+        a.reason,
+        a.status,
+        d.first_name AS dentist_first,
+        d.last_name AS dentist_last
     FROM tbl_appointments a
-    LEFT JOIN tbl_dentists d ON d.dentist_id = a.dentist_id
+    LEFT JOIN tbl_dentists d
+        ON d.dentist_id = a.dentist_id
     WHERE a.patient_id = :patient_id
-      AND (a.appointment_date < CURDATE() OR a.status IN ('completed', 'cancelled', 'no_show'))
+      AND (
+          a.appointment_date < CURDATE()
+          OR a.status IN ('completed', 'cancelled', 'no_show')
+      )
     ORDER BY a.appointment_date DESC, a.appointment_time DESC
 ");
-$historyStmt->execute(['patient_id' => $patient['patient_id']]);
+
+$historyStmt->execute([
+    'patient_id' => $patient['patient_id']
+]);
+
 $appointmentHistory = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
 $historyCount = count($appointmentHistory);
+
 $completedCount = 0;
+
 foreach ($appointmentHistory as $past) {
     if ($past['status'] === 'completed') {
         $completedCount++;
     }
 }
+
 
 $teethStmt = $pdo->prepare("
     SELECT tooth_condition
@@ -97,8 +116,119 @@ $fullName = trim(
 );
 $displayName = $patient['first_name'];
 $patientId   = 'P-' . str_pad($patient['patient_id'], 4, '0', STR_PAD_LEFT);
-$email       = $_SESSION['email'] ?? '';
+
+$email = $_SESSION['email'] ?? '';
+
+
+$reviewError = '';
+$reviewMessage = '';
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    && isset($_POST['submit_patient_review'])
+) {
+    $appointmentId = filter_input(
+        INPUT_POST,
+        'appointment_id',
+        FILTER_VALIDATE_INT
+    );
+
+    $rating = filter_input(
+        INPUT_POST,
+        'rating',
+        FILTER_VALIDATE_INT
+    );
+
+    $reviewText = trim($_POST['review_text'] ?? '');
+
+    if (!$appointmentId || $appointmentId < 1) {
+        $reviewError = 'Invalid appointment record.';
+    } elseif (
+        $rating === false ||
+        $rating === null ||
+        $rating < 1 ||
+        $rating > 5
+    ) {
+        $reviewError = 'Please select a rating from 1 to 5.';
+    } elseif ($reviewText === '') {
+        $reviewError = 'Please enter your review.';
+    } elseif (mb_strlen($reviewText) > 2000) {
+        $reviewError = 'Your review must not exceed 2,000 characters.';
+    } else {
+        $checkAppointmentStmt = $pdo->prepare("
+            SELECT appointment_id
+            FROM tbl_appointments
+            WHERE appointment_id = :appointment_id
+              AND patient_id = :patient_id
+              AND status = 'completed'
+            LIMIT 1
+        ");
+
+        $checkAppointmentStmt->execute([
+            'appointment_id' => $appointmentId,
+            'patient_id' => $patient['patient_id']
+        ]);
+
+        if (!$checkAppointmentStmt->fetchColumn()) {
+            $reviewError = 'You can only review your own completed appointments.';
+        } else {
+            $saveReviewStmt = $pdo->prepare("
+                INSERT INTO tbl_patient_reviews
+                    (patient_id, appointment_id, rating, review_text)
+                VALUES
+                    (:patient_id, :appointment_id, :rating, :review_text)
+                ON DUPLICATE KEY UPDATE
+                    rating = VALUES(rating),
+                    review_text = VALUES(review_text),
+                    updated_at = CURRENT_TIMESTAMP
+            ");
+
+            $saveReviewStmt->execute([
+                'patient_id' => $patient['patient_id'],
+                'appointment_id' => $appointmentId,
+                'rating' => $rating,
+                'review_text' => $reviewText
+            ]);
+
+            header(
+                'Location: ' . strtok($_SERVER['REQUEST_URI'], '?')
+                . '?review=success'
+            );
+            exit();
+        }
+    }
+}
+
+if (
+    isset($_GET['review']) &&
+    $_GET['review'] === 'success'
+) {
+    $reviewMessage = 'Your review has been saved successfully.';
+}
+
+$patientReviewsStmt = $pdo->prepare("
+    SELECT
+        appointment_id,
+        rating,
+        review_text,
+        created_at,
+        updated_at
+    FROM tbl_patient_reviews
+    WHERE patient_id = :patient_id
+");
+
+$patientReviewsStmt->execute([
+    'patient_id' => $patient['patient_id']
+]);
+
+$patientReviews = [];
+
+foreach ($patientReviewsStmt->fetchAll(PDO::FETCH_ASSOC) as $review) {
+    $patientReviews[(int) $review['appointment_id']] = $review;
+}
+
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -185,6 +315,79 @@ $email       = $_SESSION['email'] ?? '';
     .warning-text {
         color: #b45f06 !important;
     }
+
+    
+.review-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+
+.review-section h3 {
+    font-size: 15px;
+    margin-bottom: 6px;
+}
+
+.review-section > p {
+    color: var(--text-gray);
+    font-size: 11px;
+    margin-bottom: 14px;
+}
+
+.review-section label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    margin: 12px 0 6px;
+}
+
+.review-section select,
+.review-section textarea {
+    width: 100%;
+    padding: 11px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: white;
+    color: var(--text-dark);
+    font: inherit;
+    font-size: 12px;
+}
+
+.review-section textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.review-section select:focus,
+.review-section textarea:focus {
+    outline: none;
+    border-color: var(--blue);
+}
+
+.review-section .modal-button {
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.review-success,
+.review-error {
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-bottom: 12px;
+}
+
+.review-success {
+    color: #25854d;
+    background: #edf9f2;
+}
+
+.review-error {
+    color: #c0392b;
+    background: #fdeeee;
+}
+
     </style>
 </head>
 
@@ -484,52 +687,162 @@ $email       = $_SESSION['email'] ?? '';
 <div class="modal" id="historyModal">
     <div class="modal-box">
         <button class="close-button" onclick="closeModal('historyModal')">&times;</button>
+
         <div class="modal-icon history">
             <i class="fa-solid fa-clock-rotate-left"></i>
         </div>
+
         <h2>Appointment History</h2>
+
+        <?php if ($reviewMessage): ?>
+            <div class="review-success">
+                <i class="fa-solid fa-circle-check"></i>
+                <?php echo htmlspecialchars($reviewMessage); ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($reviewError): ?>
+            <div class="review-error">
+                <?php echo htmlspecialchars($reviewError); ?>
+            </div>
+        <?php endif; ?>
+
         <?php if ($appointmentHistory): ?>
             <div class="appointment-list">
+
                 <?php foreach ($appointmentHistory as $past): ?>
+                    <?php
+                        $appointmentId = (int) $past['appointment_id'];
+                        $reviewForAppointment = $patientReviews[$appointmentId] ?? null;
+                    ?>
+
                     <div class="appointment-item">
+
                         <div class="appointment-item-head">
-                            <strong><?php echo date('M d, Y', strtotime($past['appointment_date'])); ?></strong>
+                            <strong>
+                                <?php echo date('M d, Y', strtotime($past['appointment_date'])); ?>
+                            </strong>
+
                             <span class="appointment-status status-<?php echo htmlspecialchars($past['status']); ?>">
                                 <?php echo htmlspecialchars(statusLabel($past['status'])); ?>
                             </span>
                         </div>
+
                         <div class="information">
                             <div>
                                 <span>Time</span>
-                                <strong><?php echo date('h:i A', strtotime($past['appointment_time'])); ?></strong>
+                                <strong>
+                                    <?php echo date('h:i A', strtotime($past['appointment_time'])); ?>
+                                </strong>
                             </div>
+
                             <div>
                                 <span>Procedure</span>
-                                <strong><?php echo htmlspecialchars($past['procedure_name']); ?></strong>
+                                <strong>
+                                    <?php echo htmlspecialchars($past['procedure_name'] ?? 'Not specified'); ?>
+                                </strong>
                             </div>
+
                             <?php if (!empty($past['dentist_last'])): ?>
                                 <div>
                                     <span>Dentist</span>
-                                    <strong>Dr. <?php echo htmlspecialchars(trim($past['dentist_first'] . ' ' . $past['dentist_last'])); ?></strong>
+                                    <strong>
+                                        Dr. <?php echo htmlspecialchars(trim($past['dentist_first'] . ' ' . $past['dentist_last'])); ?>
+                                    </strong>
                                 </div>
                             <?php endif; ?>
+
                             <?php if (!empty($past['reason'])): ?>
                                 <div>
                                     <span>Reason</span>
-                                    <strong><?php echo htmlspecialchars($past['reason']); ?></strong>
+                                    <strong>
+                                        <?php echo htmlspecialchars($past['reason']); ?>
+                                    </strong>
                                 </div>
                             <?php endif; ?>
                         </div>
+
+                        <?php if ($past['status'] === 'completed'): ?>
+                            <div class="review-section">
+
+                                <h3>
+                                    <?php echo $reviewForAppointment ? 'Your Review' : 'Share Your Experience'; ?>
+                                </h3>
+
+                                <p>
+                                    Rate your experience for this appointment.
+                                </p>
+
+                                <form method="POST" action="">
+                                    <input
+                                        type="hidden"
+                                        name="appointment_id"
+                                        value="<?php echo $appointmentId; ?>"
+                                    >
+
+                                    <label for="rating_<?php echo $appointmentId; ?>">
+                                        Rating
+                                    </label>
+
+                                    <select
+                                        name="rating"
+                                        id="rating_<?php echo $appointmentId; ?>"
+                                        required
+                                    >
+                                        <option value="">Select your rating</option>
+
+                                        <?php for ($i = 5; $i >= 1; $i--): ?>
+                                            <option
+                                                value="<?php echo $i; ?>"
+                                                <?php echo (int)($reviewForAppointment['rating'] ?? 0) === $i ? 'selected' : ''; ?>
+                                            >
+                                                <?php echo $i; ?> Star<?php echo $i > 1 ? 's' : ''; ?>
+                                            </option>
+                                        <?php endfor; ?>
+                                    </select>
+
+                                    <label for="review_text_<?php echo $appointmentId; ?>">
+                                        Your Review
+                                    </label>
+
+                                    <textarea
+                                        name="review_text"
+                                        id="review_text_<?php echo $appointmentId; ?>"
+                                        rows="4"
+                                        maxlength="2000"
+                                        placeholder="Write your feedback here..."
+                                        required
+                                    ><?php echo htmlspecialchars($reviewForAppointment['review_text'] ?? ''); ?></textarea>
+
+                                    <button
+                                        type="submit"
+                                        name="submit_patient_review"
+                                        value="1"
+                                        class="modal-button"
+                                    >
+                                        <?php echo $reviewForAppointment ? 'Update Review' : 'Submit Review'; ?>
+                                    </button>
+                                </form>
+
+                            </div>
+                        <?php endif; ?>
+
                     </div>
+
                 <?php endforeach; ?>
+
             </div>
+
         <?php else: ?>
+
             <div class="empty-message">
                 <i class="fa-solid fa-clock-rotate-left"></i>
                 <p>No appointment history yet.</p>
                 <small>Your past appointments will appear here.</small>
             </div>
+
         <?php endif; ?>
+
     </div>
 </div>
 
@@ -561,5 +874,29 @@ $email       = $_SESSION['email'] ?? '';
 </div>
 
 <script src="user.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const reviewError = <?php echo json_encode($reviewError); ?>;
+    const reviewSuccess =
+        new URLSearchParams(window.location.search).get('review') === 'success';
+
+    if (reviewError || reviewSuccess) {
+        openModal('historyModal');
+    }
+
+    if (reviewSuccess) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('review');
+
+        window.history.replaceState(
+            {},
+            document.title,
+            url.pathname + url.search + url.hash
+        );
+    }
+});
+</script>
+
 </body>
 </html>
