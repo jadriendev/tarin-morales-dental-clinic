@@ -411,7 +411,7 @@ $can_finish_session = $selected_appointment
                     <form method="POST" onsubmit="return confirm('Finish this session and add it to patient history?');">
                         <input type="hidden" name="finish_session_token" value="<?= htmlspecialchars($_SESSION['finish_session_token'], ENT_QUOTES, 'UTF-8') ?>">
                         <input type="hidden" name="appointment_id" value="<?= (int) $selected_appointment_id ?>">
-                        <label for="next_appointment_date" class="block text-sm font-semibold text-slate-700 mb-2">Optional next appointment date</label>
+                        <label for="next_appointment_date" class="block text-sm font-semibold text-slate-700 mb-2">Next Appointment Date (Optional)</label>
                         <input
                             type="date"
                             id="next_appointment_date"
@@ -420,8 +420,7 @@ $can_finish_session = $selected_appointment
                             value="<?= htmlspecialchars($next_appointment_date, ENT_QUOTES, 'UTF-8') ?>"
                             class="block w-full max-w-xs mb-2 px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                        <p class="mb-4 text-xs text-slate-500">Leave blank if no follow-up is needed. The current session’s time and procedure will be used.</p>
-                        <button type="submit" name="finish_session" value="1" class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white text-sm font-semibold rounded-xl shadow-sm hover:bg-green-700 transition"><i class="fa-solid fa-check"></i> Finish Session</button>
+                        <button type="submit" name="finish_session" value="1" class="inline-flex items-center justify-center gap-2 px-6 py-3 btn-gradient text-white text-sm font-semibold rounded-xl shadow-sm hover:shadow-md transition"><i class="fa-solid fa-check"></i> Finish Session</button>
                     </form>
                 <?php endif; ?>
             </div>
