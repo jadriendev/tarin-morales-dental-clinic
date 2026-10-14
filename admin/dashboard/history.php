@@ -16,12 +16,6 @@ function json_out(array $data, int $code = 200): void
     exit;
 }
 
-function next_month_window(): array
-{
-    $first = new DateTimeImmutable('first day of next month');
-    return [$first->format('Y-m-01'), $first->format('Y-m-t'), $first->format('F Y')];
-}
-
 if (isset($_GET['action']) && $_GET['action'] === 'get') {
     $recordId = (int)($_GET['id'] ?? 0);
 
@@ -92,6 +86,21 @@ if (isset($_GET['action']) && $_GET['action'] === 'get') {
     $appointments = $st->fetchAll(PDO::FETCH_ASSOC);
 
     $st = $pdo->prepare("
+        SELECT a.appointment_id, a.appointment_date, a.appointment_time,
+               a.procedure_name, a.status,
+               CONCAT('Dr. ', d.first_name, ' ', d.last_name) AS dentist
+        FROM tbl_appointments a
+        LEFT JOIN tbl_dentists d ON d.dentist_id = a.dentist_id
+        WHERE a.patient_id = ?
+          AND a.appointment_date >= CURDATE()
+          AND a.status IN ('pending', 'confirmed', 'for_dentist', 'in_progress')
+        ORDER BY a.appointment_date ASC, a.appointment_time ASC
+        LIMIT 20
+    ");
+    $st->execute([$patientId]);
+    $upcomingAppointments = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    $st = $pdo->prepare("
         SELECT t.treatment_id, t.procedure_name, t.treatment_notes,
                t.prescription, t.remarks, t.status,
                a.appointment_date
@@ -101,14 +110,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'get') {
     ");
     $st->execute([(int)$rec['treatment_id'], $patientId]);
     $sessions = $st->fetchAll(PDO::FETCH_ASSOC);
-
-    $dentistsList = $pdo->query("
-        SELECT dentist_id, CONCAT('Dr. ', first_name, ' ', last_name) AS full_name
-        FROM tbl_dentists
-        WHERE status = 'active'
-        ORDER BY last_name ASC, first_name ASC
-    ")->fetchAll(PDO::FETCH_ASSOC);
-    [$nextMin, $nextMax, $nextLabel] = next_month_window();
 
     json_out([
     'ok'      => true,
@@ -122,17 +123,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'get') {
         'remaining_balance' => $p['remaining_balance'] ?? '0.00',
         'remaining_session' => $p['remaining_session'] ?? '0',
     ],
-    'dentists'        => $dentistsList,
-    'default_dentist' => (int)$rec['dentist_id'],
-    'next_month'      => [
-        'min'   => $nextMin,
-        'max'   => $nextMax,
-        'label' => $nextLabel
-    ],
-    'teeth'        => $teeth,
-    'appointments' => $appointments,
-    'sessions'     => $sessions,
-    'reviews'      => $patientReviews
+    'teeth'                 => $teeth,
+    'appointments'          => $appointments,
+    'upcoming_appointments' => $upcomingAppointments,
+    'sessions'              => $sessions,
+    'reviews'               => $patientReviews
 ]);
 }
 
@@ -253,104 +248,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'save')
             ? $e->getMessage()
             : 'Could not save changes. Please try again.';
         json_out(['ok' => false, 'message' => $msg], 500);
-    }
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'book') {
-    $in = json_decode(file_get_contents('php://input'), true);
-
-    if (!is_array($in) || !hash_equals($csrf, (string)($in['csrf'] ?? ''))) {
-        json_out(['ok' => false, 'message' => 'Invalid request.'], 400);
-    }
-
-    $adminId = (int)($_SESSION['admin_id'] ?? 0);
-    if ($adminId <= 0) {
-        json_out(['ok' => false, 'message' => 'Admin session not found. Please log in again.'], 401);
-    }
-
-    $recordId = (int)($in['record_id'] ?? 0);
-    $st = $pdo->prepare("SELECT patient_id, appointment_id FROM tbl_dental_records WHERE record_id = ?");
-    $st->execute([$recordId]);
-    $rec = $st->fetch(PDO::FETCH_ASSOC);
-    if (!$rec) {
-        json_out(['ok' => false, 'message' => 'Record not found.'], 404);
-    }
-    $patientId = (int)$rec['patient_id'];
-
-    $dentistId = (int)($in['dentist_id'] ?? 0);
-    $date      = trim((string)($in['appointment_date'] ?? ''));
-    $time      = trim((string)($in['appointment_time'] ?? ''));
-    $proc      = trim((string)($in['procedure_name'] ?? ''));
-    $reason    = trim((string)($in['reason'] ?? ''));
-
-    try {
-        [$nextMin, $nextMax] = next_month_window();
-
-        $d = DateTime::createFromFormat('Y-m-d', $date);
-        if (!$d || $d->format('Y-m-d') !== $date) {
-            throw new RuntimeException('Please choose a valid date.');
-        }
-        if ($date < $nextMin || $date > $nextMax) {
-            throw new RuntimeException('The next appointment must be within next month.');
-        }
-
-        $t = DateTime::createFromFormat('H:i', $time);
-        if (!$t || $t->format('H:i') !== $time) {
-            throw new RuntimeException('Please choose a valid time.');
-        }
-        $time .= ':00';
-
-        if ($proc === '' || strlen($proc) > 150) {
-            throw new RuntimeException('Procedure is required (150 characters max).');
-        }
-
-        $st = $pdo->prepare("
-            SELECT p.patient_id
-            FROM tbl_patients p
-            INNER JOIN tbl_users u ON u.user_id = p.user_id
-            WHERE p.patient_id = ? AND u.status = 'active'
-        ");
-        $st->execute([$patientId]);
-        if (!$st->fetch()) {
-            throw new RuntimeException('This patient account is inactive.');
-        }
-
-        $st = $pdo->prepare("SELECT dentist_id FROM tbl_dentists WHERE dentist_id = ? AND status = 'active'");
-        $st->execute([$dentistId]);
-        if (!$st->fetch()) {
-            throw new RuntimeException('The selected dentist is not available.');
-        }
-
-        $st = $pdo->prepare("
-            SELECT COUNT(*) FROM tbl_appointments
-            WHERE dentist_id = ? AND appointment_date = ? AND appointment_time = ?
-              AND status NOT IN ('cancelled', 'no_show')
-        ");
-        $st->execute([$dentistId, $date, $time]);
-        if ($st->fetchColumn() > 0) {
-            throw new RuntimeException('That dentist is already booked for this date and time.');
-        }
-
-        $st = $pdo->prepare("
-            INSERT INTO tbl_appointments
-                (admin_id, patient_id, dentist_id, appointment_date, appointment_time,
-                 procedure_name, reason, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'for_dentist')
-        ");
-        $st->execute([
-            $adminId, $patientId, $dentistId, $date, $time, $proc,
-            $reason !== '' ? $reason : null,
-        ]);
-
-        json_out([
-            'ok'       => true,
-            'message'  => 'Next appointment booked.',
-        ]);
-    } catch (RuntimeException $e) {
-        json_out(['ok' => false, 'message' => $e->getMessage()], 422);
-    } catch (Throwable $e) {
-        error_log('History book error: ' . $e->getMessage());
-        json_out(['ok' => false, 'message' => 'Could not book the appointment. Please try again.'], 500);
     }
 }
 
@@ -544,8 +441,6 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
         box-shadow: 0 4px 12px rgba(147, 51, 234, 0.25); }
     .hm-btn.primary:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(147, 51, 234, 0.35); }
     .hm-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
-    .hm-sub { font-weight: 500; font-size: 12px; color: var(--text-muted, #6b7280); margin-left: 6px; }
-    .hm-bookbar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 16px; }
     @keyframes hmFade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes hmPop { from { opacity: 0; transform: translateY(12px) scale(0.98); }
         to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -670,20 +565,8 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
             </div>
 
             <div class="hm-sec">
-                <h4>Book Next Appointment <span class="hm-sub" id="hmNextLabel"></span></h4>
-                <div class="hm-item">
-                    <div class="hm-grid">
-                        <div class="hm-field"><label for="hmBookDentist">Dentist</label><select id="hmBookDentist"></select></div>
-                        <div class="hm-field"><label for="hmBookDate">Date (next month only)</label><input type="date" id="hmBookDate"></div>
-                        <div class="hm-field"><label for="hmBookTime">Time</label><input type="time" id="hmBookTime"></div>
-                        <div class="hm-field"><label for="hmBookProc">Procedure</label><input type="text" id="hmBookProc" maxlength="150"></div>
-                        <div class="hm-field hm-full"><label for="hmBookReason">Reason / Notes</label><textarea id="hmBookReason" rows="2"></textarea></div>
-                    </div>
-                    <div class="hm-bookbar">
-                        <span class="hm-msg" id="hmBookMsg"></span>
-                        <button type="button" class="hm-btn primary" id="hmBook">Book Appointment</button>
-                    </div>
-                </div>
+                <h4>Upcoming Appointments</h4>
+                <div id="hmUpcomingAppointments"></div>
             </div>
 
             <div class="hm-foot">
@@ -855,31 +738,6 @@ function renderReviews(reviews) {
 
     var apptRows = [], sessRows = [];
 
-    function setBookMsg(text, ok) {
-        var m = $('hmBookMsg');
-        m.textContent = text || '';
-        m.style.color = ok ? '#15803d' : '#b91c1c';
-    }
-
-    function renderBookForm(data) {
-        var sel = $('hmBookDentist'); sel.innerHTML = '';
-        (data.dentists || []).forEach(function (d) {
-            var o = el('option', { value: d.dentist_id, text: d.full_name });
-            if (parseInt(d.dentist_id, 10) === parseInt(data.default_dentist, 10)) o.selected = true;
-            sel.appendChild(o);
-        });
-        var nm = data.next_month || {};
-        $('hmNextLabel').textContent = nm.label ? '(' + nm.label + ')' : '';
-        $('hmBookDate').min = nm.min || '';
-        $('hmBookDate').max = nm.max || '';
-        $('hmBookDate').value = '';
-        var a0 = (data.appointments || [])[0], s0 = (data.sessions || [])[0];
-        $('hmBookTime').value = a0 ? (a0.appointment_time || '').substring(0, 5) : '';
-        $('hmBookProc').value = (a0 && a0.procedure_name) || (s0 && s0.procedure_name) || '';
-        $('hmBookReason').value = '';
-        setBookMsg('');
-    }
-
     function render(data) {
         var p = data.patient;
         $('hmName').value = p.full_name || '';
@@ -948,40 +806,25 @@ function renderReviews(reviews) {
                 ])
             ]));
         });
-    }
 
-    function book() {
-        var btn = $('hmBook');
-        if (!$('hmBookDate').value || !$('hmBookTime').value || !$('hmBookProc').value.trim()) {
-            setBookMsg('Please fill in the dentist, date, time and procedure.', false);
-            return;
+        var upcomingBox = $('hmUpcomingAppointments');
+        upcomingBox.innerHTML = '';
+        if (!Array.isArray(data.upcoming_appointments) || data.upcoming_appointments.length === 0) {
+            upcomingBox.appendChild(el('div', { 'class': 'hm-empty', text: 'No upcoming appointments scheduled.' }));
         }
-        btn.disabled = true; setBookMsg('Booking...', true);
-
-        fetch('history.php?action=book', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                csrf: CSRF,
-                record_id: currentRecord,
-                dentist_id: $('hmBookDentist').value,
-                appointment_date: $('hmBookDate').value,
-                appointment_time: $('hmBookTime').value,
-                procedure_name: $('hmBookProc').value,
-                reason: $('hmBookReason').value
-            })
-        })
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                setBookMsg(d.message || (d.ok ? 'Booked.' : 'Failed.'), d.ok);
-                if (d.ok) {
-                    $('hmBookDate').value = '';
-                    $('hmBookReason').value = '';
-                }
-            })
-            .catch(function () { setBookMsg('Network error. Please try again.', false); })
-            .then(function () { btn.disabled = false; });
+        (data.upcoming_appointments || []).forEach(function (a) {
+            upcomingBox.appendChild(el('div', { 'class': 'hm-item' }, [
+                el('div', {
+                    'class': 'hm-item-title',
+                    text: fmtDate(a.appointment_date) + ' · ' + (a.appointment_time || '').substring(0, 5)
+                }),
+                el('div', {
+                    text: (a.procedure_name || 'Appointment')
+                        + (a.dentist ? ' · ' + a.dentist : '')
+                        + ' · ' + String(a.status || '').replace(/_/g, ' ')
+                })
+            ]));
+        });
     }
 
     function load(id) {
@@ -997,7 +840,6 @@ function renderReviews(reviews) {
             .then(function (d) {
                 if (!d.ok) throw new Error(d.message || 'Failed to load.');
                 render(d);
-                renderBookForm(d);
                 $('hmLoading').style.display = 'none';
                 $('hmBody').style.display = 'block';
             })
@@ -1054,7 +896,6 @@ function renderReviews(reviews) {
     $('hmClose').addEventListener('click', close);
     $('hmCancel').addEventListener('click', close);
     $('hmSave').addEventListener('click', save);
-    $('hmBook').addEventListener('click', book);
     overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
 })();

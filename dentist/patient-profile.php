@@ -5,10 +5,12 @@ session_start();
 $patient_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT) ?: 0;
 $selected_appointment_id = filter_input(INPUT_GET, 'appointment_id', FILTER_VALIDATE_INT) ?: 0;
 $dentist_id = filter_var($_SESSION['dentist_id'] ?? null, FILTER_VALIDATE_INT) ?: 0;
+$next_appointment_date = trim((string) ($_POST['next_appointment_date'] ?? ''));
 $patient = null;
 $selected_appointment = null;
 $error = '';
 $finished = isset($_GET['finished']) && $_GET['finished'] === '1';
+$follow_up_booked = isset($_GET['follow_up']) && $_GET['follow_up'] === '1';
 if (empty($_SESSION['finish_session_token'])) {
     $_SESSION['finish_session_token'] = bin2hex(random_bytes(32));
 }
@@ -40,7 +42,8 @@ if ($patient && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['finish_se
         try {
             mysqli_begin_transaction($link);
 
-            $appointment_stmt = mysqli_prepare($link, "SELECT appointment_id, patient_id, dentist_id, procedure_name, reason, status
+            $appointment_stmt = mysqli_prepare($link, "SELECT appointment_id, patient_id, dentist_id, admin_id,
+                    appointment_time, procedure_name, reason, status
                 FROM tbl_appointments
                 WHERE appointment_id = ? AND patient_id = ? AND dentist_id = ?
                 LIMIT 1 FOR UPDATE");
@@ -57,6 +60,34 @@ if ($patient && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['finish_se
             if (!$appointment_to_finish
                 || !in_array(strtolower($appointment_to_finish['status']), $finishable_statuses, true)) {
                 throw new RuntimeException('This appointment is no longer available to finish.');
+            }
+
+            if ($next_appointment_date !== '') {
+                $follow_up_date = DateTime::createFromFormat('!Y-m-d', $next_appointment_date);
+                if (!$follow_up_date || $follow_up_date->format('Y-m-d') !== $next_appointment_date) {
+                    throw new RuntimeException('Please choose a valid date for the next appointment.');
+                }
+                if ($next_appointment_date <= date('Y-m-d')) {
+                    throw new RuntimeException('The next appointment date must be in the future.');
+                }
+
+                $availability_stmt = mysqli_prepare($link, "SELECT appointment_id
+                    FROM tbl_appointments
+                    WHERE dentist_id = ? AND appointment_date = ? AND appointment_time = ?
+                        AND status NOT IN ('cancelled', 'no_show')
+                    LIMIT 1 FOR UPDATE");
+                if (!$availability_stmt) {
+                    throw new RuntimeException("Could not check the dentist's availability.");
+                }
+                $appointment_time = $appointment_to_finish['appointment_time'];
+                mysqli_stmt_bind_param($availability_stmt, 'iss', $dentist_id, $next_appointment_date, $appointment_time);
+                mysqli_stmt_execute($availability_stmt);
+                $availability_result = mysqli_stmt_get_result($availability_stmt);
+                $appointment_conflict = mysqli_fetch_assoc($availability_result) ?: null;
+                mysqli_stmt_close($availability_stmt);
+                if ($appointment_conflict) {
+                    throw new RuntimeException('The dentist already has an appointment at that date and time.');
+                }
             }
 
             $treatment_stmt = mysqli_prepare($link, 'SELECT treatment_id, treatment_notes FROM tbl_treatments WHERE appointment_id = ? LIMIT 1 FOR UPDATE');
@@ -134,8 +165,36 @@ if ($patient && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['finish_se
             mysqli_stmt_execute($complete_appointment_stmt);
             mysqli_stmt_close($complete_appointment_stmt);
 
+            if ($next_appointment_date !== '') {
+                $follow_up_reason = 'Follow-up recommended after appointment #' . $posted_appointment_id . '.';
+                $insert_follow_up_stmt = mysqli_prepare($link, "INSERT INTO tbl_appointments
+                    (patient_id, dentist_id, admin_id, appointment_date, appointment_time,
+                     procedure_name, reason, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'for_dentist')");
+                if (!$insert_follow_up_stmt) {
+                    throw new RuntimeException('Could not book the next appointment.');
+                }
+                $appointment_admin_id = (int) $appointment_to_finish['admin_id'];
+                $appointment_time = $appointment_to_finish['appointment_time'];
+                $procedure_name = $appointment_to_finish['procedure_name'];
+                mysqli_stmt_bind_param(
+                    $insert_follow_up_stmt,
+                    'iiissss',
+                    $patient_id,
+                    $dentist_id,
+                    $appointment_admin_id,
+                    $next_appointment_date,
+                    $appointment_time,
+                    $procedure_name,
+                    $follow_up_reason
+                );
+                mysqli_stmt_execute($insert_follow_up_stmt);
+                mysqli_stmt_close($insert_follow_up_stmt);
+            }
+
             mysqli_commit($link);
-            header('Location: patient-profile.php?id=' . $patient_id . '&appointment_id=' . $posted_appointment_id . '&finished=1');
+            $follow_up_query = $next_appointment_date !== '' ? '&follow_up=1' : '';
+            header('Location: patient-profile.php?id=' . $patient_id . '&appointment_id=' . $posted_appointment_id . '&finished=1' . $follow_up_query);
             exit();
         } catch (mysqli_sql_exception $exception) {
             mysqli_rollback($link);
@@ -281,7 +340,9 @@ $can_finish_session = $selected_appointment
                 <div class="bg-white border border-amber-200 rounded-2xl p-6 text-amber-800">This patient record could not be found. <a href="patients.php" class="underline font-semibold">Return to patients</a>.</div>
             <?php else: ?>
             <?php if ($finished): ?>
-                <div class="mb-6 bg-green-50 border border-green-200 rounded-2xl p-4 text-green-800" role="status">Session finished and added to the admin patient history.</div>
+                <div class="mb-6 bg-green-50 border border-green-200 rounded-2xl p-4 text-green-800" role="status">
+                    Session finished and added to patient history.<?= $follow_up_booked ? ' The follow-up appointment has been booked.' : '' ?>
+                </div>
             <?php elseif ($error !== ''): ?>
                 <div class="mb-6 bg-red-50 border border-red-200 rounded-2xl p-4 text-red-800" role="alert"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
             <?php endif; ?>
@@ -347,9 +408,19 @@ $can_finish_session = $selected_appointment
             <div class="flex flex-wrap gap-3 mt-8">
                 <a href="patients.php" class="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition"><i class="fa-solid fa-arrow-left"></i> Back to Patients</a>
                 <?php if ($can_finish_session): ?>
-                    <form method="POST" onsubmit="return confirm('Finish this session and add it to the admin patient history?');">
+                    <form method="POST" onsubmit="return confirm('Finish this session and add it to patient history?');">
                         <input type="hidden" name="finish_session_token" value="<?= htmlspecialchars($_SESSION['finish_session_token'], ENT_QUOTES, 'UTF-8') ?>">
                         <input type="hidden" name="appointment_id" value="<?= (int) $selected_appointment_id ?>">
+                        <label for="next_appointment_date" class="block text-sm font-semibold text-slate-700 mb-2">Optional next appointment date</label>
+                        <input
+                            type="date"
+                            id="next_appointment_date"
+                            name="next_appointment_date"
+                            min="<?= htmlspecialchars(date('Y-m-d', strtotime('+1 day')), ENT_QUOTES, 'UTF-8') ?>"
+                            value="<?= htmlspecialchars($next_appointment_date, ENT_QUOTES, 'UTF-8') ?>"
+                            class="block w-full max-w-xs mb-2 px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                        <p class="mb-4 text-xs text-slate-500">Leave blank if no follow-up is needed. The current session’s time and procedure will be used.</p>
                         <button type="submit" name="finish_session" value="1" class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white text-sm font-semibold rounded-xl shadow-sm hover:bg-green-700 transition"><i class="fa-solid fa-check"></i> Finish Session</button>
                     </form>
                 <?php endif; ?>
