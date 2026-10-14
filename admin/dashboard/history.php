@@ -62,6 +62,25 @@ if (isset($_GET['action']) && $_GET['action'] === 'get') {
     $teeth = $st->fetchAll(PDO::FETCH_ASSOC);
 
     $st = $pdo->prepare("
+        SELECT
+            r.review_id,
+            r.appointment_id,
+            r.rating,
+            r.review_text,
+            r.created_at,
+            a.appointment_date,
+            a.procedure_name
+        FROM tbl_patient_reviews r
+        LEFT JOIN tbl_appointments a
+            ON a.appointment_id = r.appointment_id
+        WHERE r.patient_id = ?
+        ORDER BY r.created_at DESC, r.review_id DESC
+    ");
+    $st->execute([$patientId]);
+    $patientReviews = $st->fetchAll(PDO::FETCH_ASSOC);
+
+
+    $st = $pdo->prepare("
         SELECT a.appointment_id, a.appointment_date, a.appointment_time,
                a.procedure_name, a.reason, a.status,
                CONCAT('Dr. ', d.first_name, ' ', d.last_name) AS dentist
@@ -92,24 +111,29 @@ if (isset($_GET['action']) && $_GET['action'] === 'get') {
     [$nextMin, $nextMax, $nextLabel] = next_month_window();
 
     json_out([
-        'ok'      => true,
-        'patient' => [
-            'full_name'         => $fullName,
-            'birth_date'        => $p['birth_date'],
-            'sex'               => $p['sex'],
-            'contact_number'    => $p['contact_number'],
-            'address'           => $p['address'],
-            'email'             => $p['email'] ?? '',
-            'remaining_balance' => $p['remaining_balance'] ?? '0.00',
-            'remaining_session' => $p['remaining_session'] ?? '0',
-        ],
-        'dentists'     => $dentistsList,
-        'default_dentist' => (int)$rec['dentist_id'],
-        'next_month'   => ['min' => $nextMin, 'max' => $nextMax, 'label' => $nextLabel],
-        'teeth'        => $teeth,
-        'appointments' => $appointments,
-        'sessions'     => $sessions,
-    ]);
+    'ok'      => true,
+    'patient' => [
+        'full_name'         => $fullName,
+        'birth_date'        => $p['birth_date'],
+        'sex'               => $p['sex'],
+        'contact_number'    => $p['contact_number'],
+        'address'           => $p['address'],
+        'email'             => $p['email'] ?? '',
+        'remaining_balance' => $p['remaining_balance'] ?? '0.00',
+        'remaining_session' => $p['remaining_session'] ?? '0',
+    ],
+    'dentists'        => $dentistsList,
+    'default_dentist' => (int)$rec['dentist_id'],
+    'next_month'      => [
+        'min'   => $nextMin,
+        'max'   => $nextMax,
+        'label' => $nextLabel
+    ],
+    'teeth'        => $teeth,
+    'appointments' => $appointments,
+    'sessions'     => $sessions,
+    'reviews'      => $patientReviews
+]);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['action'] ?? '') === 'save') {
@@ -525,6 +549,60 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
     @keyframes hmFade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes hmPop { from { opacity: 0; transform: translateY(12px) scale(0.98); }
         to { opacity: 1; transform: translateY(0) scale(1); } }
+        
+.hm-review-card {
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: var(--radius-md, 8px);
+    padding: 16px;
+    margin-bottom: 12px;
+    background: var(--surface, #fff);
+}
+
+.hm-review-card:last-child {
+    margin-bottom: 0;
+}
+
+.hm-review-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.hm-review-rating {
+    color: #f59e0b;
+    font-size: 16px;
+    letter-spacing: 2px;
+    white-space: nowrap;
+}
+
+.hm-review-date {
+    color: var(--text-muted, #6b7280);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.hm-review-procedure {
+    color: var(--text-muted, #6b7280);
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+.hm-review-text {
+    color: var(--text-main, #374151);
+    font-size: 14px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.hm-review-score {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-main, #374151);
+}
+
     @media (max-width: 768px) { .hm-grid { grid-template-columns: 1fr; } .hm-full { grid-column: auto; } }
 </style>
 
@@ -554,6 +632,15 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
                 <h4>Teeth Condition</h4>
                 <div class="hm-teeth" id="hmTeeth"></div>
             </div>
+
+            
+<div class="hm-sec">
+    <h4>Patient Reviews</h4>
+    <div id="hmReviews">
+        <div class="hm-empty">Loading patient reviews...</div>
+    </div>
+</div>
+
 
             <div class="hm-sec">
                 <h4>Balance &amp; Sessions</h4>
@@ -659,6 +746,113 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
         return isNaN(dt) ? d : dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     }
 
+    
+function renderReviews(reviews) {
+    var box = $('hmReviews');
+    box.innerHTML = '';
+
+    if (!Array.isArray(reviews) || reviews.length === 0) {
+        box.appendChild(
+            el('div', {
+                'class': 'hm-empty',
+                text: 'No review submitted yet.'
+            })
+        );
+        return;
+    }
+
+    reviews.forEach(function (review) {
+        var rating = Math.max(
+            0,
+            Math.min(5, parseInt(review.rating, 10) || 0)
+        );
+
+        var stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+
+        var dateText = review.created_at || '';
+        if (dateText) {
+            var parsedDate = new Date(
+                dateText.replace(' ', 'T')
+            );
+
+            if (!isNaN(parsedDate.getTime())) {
+                dateText = parsedDate.toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit'
+                });
+            }
+        }
+
+        var card = el('div', {
+            'class': 'hm-review-card'
+        });
+
+        var head = el('div', {
+            'class': 'hm-review-head'
+        });
+
+        var details = el('div');
+
+        details.appendChild(
+            el('div', {
+                'class': 'hm-review-rating',
+                text: stars
+            })
+        );
+
+        details.appendChild(
+            el('div', {
+                'class': 'hm-review-score',
+                text: rating + ' out of 5'
+            })
+        );
+
+        details.appendChild(
+            el('div', {
+                'class': 'hm-review-date',
+                text: dateText ? 'Submitted: ' + dateText : 'Date unavailable'
+            })
+        );
+
+        head.appendChild(details);
+        card.appendChild(head);
+
+        if (review.appointment_date || review.procedure_name) {
+            var appointmentInfo = [];
+
+            if (review.procedure_name) {
+                appointmentInfo.push(review.procedure_name);
+            }
+
+            if (review.appointment_date) {
+                appointmentInfo.push(
+                    fmtDate(review.appointment_date)
+                );
+            }
+
+            card.appendChild(
+                el('div', {
+                    'class': 'hm-review-procedure',
+                    text: 'Appointment: ' + appointmentInfo.join(' • ')
+                })
+            );
+        }
+
+        card.appendChild(
+            el('div', {
+                'class': 'hm-review-text',
+                text: review.review_text || 'No written feedback provided.'
+            })
+        );
+
+        box.appendChild(card);
+    });
+}
+
+
     var apptRows = [], sessRows = [];
 
     function setBookMsg(text, ok) {
@@ -696,6 +890,7 @@ $history = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
         $('hmAddress').value = p.address || '';
         $('hmBalance').value = parseFloat(p.remaining_balance || 0).toFixed(2);
         $('hmSessionsLeft').value = parseInt(p.remaining_session || 0, 10) || 0;
+        renderReviews(data.reviews || []);
 
         var teeth = $('hmTeeth'); teeth.innerHTML = '';
         if (!data.teeth.length) {
