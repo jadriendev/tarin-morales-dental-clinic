@@ -397,6 +397,18 @@ $can_finish_session = $selected_appointment
                             <p class="text-xs text-slate-400 mt-2"><?= htmlspecialchars(date('M j, Y', strtotime($selected_appointment['appointment_date'])), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars(ucfirst(str_replace('_', ' ', $selected_appointment['appointment_status'])), ENT_QUOTES, 'UTF-8') ?></p>
                             <?php if ($can_finish_session): ?>
                                 <a href="add-prescription.php?patient_id=<?= (int) $patient_id ?>&amp;appointment_id=<?= (int) $selected_appointment_id ?>" class="inline-flex items-center justify-center gap-2 px-4 py-2 btn-gradient text-white text-sm font-medium rounded-xl shadow-sm hover:shadow-md transition mt-5"><i class="fa-solid fa-prescription"></i> Add Prescription</a>
+                                <div class="mt-5">
+                                    <label for="next_appointment_date" class="block text-xs font-bold uppercase tracking-wider text-blue-600 mb-2">Next Appointment Date</label>
+                                    <input
+                                        type="date"
+                                        id="next_appointment_date"
+                                        name="next_appointment_date"
+                                        form="finish-session-form"
+                                        min="<?= htmlspecialchars(date('Y-m-d', strtotime('+1 day')), ENT_QUOTES, 'UTF-8') ?>"
+                                        value="<?= htmlspecialchars($next_appointment_date, ENT_QUOTES, 'UTF-8') ?>"
+                                        class="block w-full max-w-xs px-4 py-3 border border-blue-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                </div>
                             <?php endif; ?>
                         <?php else: ?>
                             <span class="font-medium text-slate-500 mt-1">No appointment or procedure recorded yet.</span>
@@ -405,21 +417,12 @@ $can_finish_session = $selected_appointment
                 </div>
             </div>
 
-            <div class="flex flex-wrap gap-3 mt-8">
-                <a href="patients.php" class="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition"><i class="fa-solid fa-arrow-left"></i> Back to Patients</a>
+            <div class="flex flex-wrap items-start gap-3 mt-8">
+                <a href="patients.php" class="inline-flex self-start items-center justify-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-200 transition"><i class="fa-solid fa-arrow-left"></i> Back to Patients</a>
                 <?php if ($can_finish_session): ?>
-                    <form method="POST" onsubmit="return confirm('Finish this session and add it to patient history?');">
+                    <form id="finish-session-form" method="POST">
                         <input type="hidden" name="finish_session_token" value="<?= htmlspecialchars($_SESSION['finish_session_token'], ENT_QUOTES, 'UTF-8') ?>">
                         <input type="hidden" name="appointment_id" value="<?= (int) $selected_appointment_id ?>">
-                        <label for="next_appointment_date" class="block text-sm font-semibold text-slate-700 mb-2">Next Appointment Date (Optional)</label>
-                        <input
-                            type="date"
-                            id="next_appointment_date"
-                            name="next_appointment_date"
-                            min="<?= htmlspecialchars(date('Y-m-d', strtotime('+1 day')), ENT_QUOTES, 'UTF-8') ?>"
-                            value="<?= htmlspecialchars($next_appointment_date, ENT_QUOTES, 'UTF-8') ?>"
-                            class="block w-full max-w-xs mb-2 px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
                         <button type="submit" name="finish_session" value="1" class="inline-flex items-center justify-center gap-2 px-6 py-3 btn-gradient text-white text-sm font-semibold rounded-xl shadow-sm hover:shadow-md transition"><i class="fa-solid fa-check"></i> Finish Session</button>
                     </form>
                 <?php endif; ?>
